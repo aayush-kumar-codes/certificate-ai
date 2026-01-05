@@ -11,6 +11,7 @@ export function ChatInterface() {
   const messages = useChatStore((state: ChatStore) => state.messages)
   const isLoading = useChatStore((state: ChatStore) => state.isLoading)
   const loadingMessage = useChatStore((state: ChatStore) => state.loadingMessage)
+  const showSimpleLoader = useChatStore((state: ChatStore) => state.showSimpleLoader)
   const addMessage = useChatStore((state: ChatStore) => state.addMessage)
   const setLoading = useChatStore((state: ChatStore) => state.setLoading)
   const chatHistory = useChatStore((state: ChatStore) => state.chatHistory)
@@ -114,10 +115,12 @@ export function ChatInterface() {
     setInput("")
 
     try {
-      setLoading(true, "Evaluating certificate...")
+      // Use simple loader for follow-up questions
+      setLoading(true, "", true)
 
       const response = await askQuestion(question, chatHistory(), (message) => {
-        setLoading(true, message)
+        // Keep simple loader for follow-up questions
+        setLoading(true, "", true)
       })
 
       addMessage({
@@ -197,10 +200,18 @@ export function ChatInterface() {
                 <Bot className="size-4" />
               </div>
               <div className="flex flex-col gap-2 max-w-[85%]">
-                <div className="rounded-2xl px-4 py-3 text-sm leading-relaxed bg-card border border-border flex items-center gap-2">
-                  <Loader2 className="size-4 animate-spin text-primary" />
-                  <span>{loadingMessage || "Processing..."}</span>
-                </div>
+                {showSimpleLoader ? (
+                  // Simple loader for follow-up questions
+                  <div className="rounded-2xl px-4 py-3 text-sm leading-relaxed bg-card border border-border flex items-center justify-center">
+                    <Loader2 className="size-4 animate-spin text-primary" />
+                  </div>
+                ) : (
+                  // Mixed text loader for PDF upload evaluation
+                  <div className="rounded-2xl px-4 py-3 text-sm leading-relaxed bg-card border border-border flex items-center gap-2">
+                    <Loader2 className="size-4 animate-spin text-primary" />
+                    <span>{loadingMessage || "Processing..."}</span>
+                  </div>
+                )}
               </div>
             </div>
           )}

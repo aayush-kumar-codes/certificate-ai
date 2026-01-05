@@ -60,14 +60,16 @@ export function KnowledgePanel() {
           const evaluationPrompt =
             "Evaluate the uploaded certificate and provide a summary of its key information, compliance status, and any important findings."
 
-          setChatLoading(true, "Evaluating certificate...")
+          // Use mixed text loader for PDF upload evaluation
+          setChatLoading(true, "Evaluating certificate...", false)
 
           const response = await askQuestion(
             evaluationPrompt,
             chatHistory(),
             (message) => {
               updateLoadingMessage(id, message)
-              setChatLoading(true, message)
+              // Keep mixed text loader for PDF upload evaluation
+              setChatLoading(true, message, false)
               if (message === "Analyzing compliance requirements...") {
                 updateCertificate(id, { status: "Analyzing" })
               } else if (message === "Generating evaluation report...") {

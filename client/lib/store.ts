@@ -38,8 +38,9 @@ export interface ChatStore {
   messages: ChatMessage[]
   isLoading: boolean
   loadingMessage: string
+  showSimpleLoader: boolean
   addMessage: (message: ChatMessage) => void
-  setLoading: (isLoading: boolean, message?: string) => void
+  setLoading: (isLoading: boolean, message?: string, showSimpleLoader?: boolean) => void
   clearMessages: () => void
   chatHistory: () => Array<{ role: string; content: string }>
 }
@@ -72,12 +73,13 @@ export const useChatStore = create<ChatStore>((set, get) => ({
   messages: [],
   isLoading: false,
   loadingMessage: "",
+  showSimpleLoader: false,
   addMessage: (message) =>
     set((state) => ({
       messages: [...state.messages, message],
     })),
-  setLoading: (isLoading, message = "") =>
-    set({ isLoading, loadingMessage: message }),
+  setLoading: (isLoading, message = "", showSimpleLoader = false) =>
+    set({ isLoading, loadingMessage: message, showSimpleLoader }),
   clearMessages: () => set({ messages: [] }),
   chatHistory: () =>
     get().messages.map((msg) => ({
