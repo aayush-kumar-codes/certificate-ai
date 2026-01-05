@@ -16,6 +16,8 @@ export function ChatInterface() {
   const chatHistory = useChatStore((state: ChatStore) => state.chatHistory)
 
   const scrollRef = React.useRef<HTMLDivElement>(null)
+  const messagesEndRef = React.useRef<HTMLDivElement>(null)
+  const viewportRef = React.useRef<HTMLElement | null>(null)
 
   // Add welcome message on mount if no messages
   React.useEffect(() => {
@@ -30,11 +32,78 @@ export function ChatInterface() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
+  // Find and store viewport reference when component mounts or scrollRef changes
   React.useEffect(() => {
-    if (scrollRef.current) {
-      scrollRef.current.scrollTop = scrollRef.current.scrollHeight
+    const findViewport = () => {
+      if (scrollRef.current) {
+        const viewport = scrollRef.current.querySelector('[data-slot="scroll-area-viewport"]') as HTMLElement
+        if (viewport) {
+          viewportRef.current = viewport
+          return true
+        }
+      }
+      return false
     }
-  }, [messages, isLoading])
+
+    // Try immediately
+    if (!findViewport()) {
+      // If not found, try again after a short delay (viewport might not be rendered yet)
+      const timeoutId = setTimeout(() => {
+        findViewport()
+      }, 100)
+      return () => clearTimeout(timeoutId)
+    }
+  }, [])
+
+  // Auto-scroll when messages, loading state, or loading message changes
+  React.useEffect(() => {
+    const scrollToBottom = () => {
+      // Try to use stored viewport ref first
+      const viewport = viewportRef.current || scrollRef.current?.querySelector('[data-slot="scroll-area-viewport"]') as HTMLElement
+      
+      if (viewport) {
+        // Update stored ref if we found it
+        if (!viewportRef.current) {
+          viewportRef.current = viewport
+        }
+        // Scroll to bottom - use 'auto' for instant scroll
+        viewport.scrollTop = viewport.scrollHeight
+      }
+      
+      // Also try scrollIntoView as backup
+      if (messagesEndRef.current) {
+        messagesEndRef.current.scrollIntoView({ behavior: 'auto', block: 'end' })
+      }
+    }
+
+    // Use multiple timeouts to ensure DOM has fully updated
+    const timeoutId1 = setTimeout(() => {
+      requestAnimationFrame(() => {
+        scrollToBottom()
+      })
+    }, 0)
+
+    // Try again after a short delay to catch any async updates
+    const timeoutId2 = setTimeout(() => {
+      scrollToBottom()
+    }, 100)
+
+    // If loading, set up an interval to continuously scroll during streaming
+    let intervalId: NodeJS.Timeout | null = null
+    if (isLoading) {
+      intervalId = setInterval(() => {
+        scrollToBottom()
+      }, 200) // Scroll every 200ms during loading
+    }
+
+    return () => {
+      clearTimeout(timeoutId1)
+      clearTimeout(timeoutId2)
+      if (intervalId) {
+        clearInterval(intervalId)
+      }
+    }
+  }, [messages, isLoading, loadingMessage])
 
   const handleSend = async () => {
     if (!input.trim() || isLoading) return
@@ -95,9 +164,10 @@ export function ChatInterface() {
   }
 
   return (
-    <div className="flex-1 flex flex-col h-full bg-background relative">
-      <ScrollArea className="flex-1 px-6 pt-20" ref={scrollRef}>
-        <div className="max-w-2xl mx-auto space-y-8 pb-32">
+    <div className="flex-1 flex flex-col h-full bg-background relative overflow-hidden">
+      <div ref={scrollRef} className="flex-1 overflow-hidden">
+        <ScrollArea className="h-full px-6 pt-20">
+        <div className="max-w-2xl mx-auto space-y-8 pb-40">
           {messages.map((msg: ChatMessage, i: number) => (
             <div key={i} className={`flex gap-4 ${msg.role === "user" ? "justify-end" : ""}`}>
               {msg.role === "bot" && (
@@ -140,10 +210,12 @@ export function ChatInterface() {
               </div>
             </div>
           )}
+          <div ref={messagesEndRef} />
         </div>
       </ScrollArea>
+      </div>
 
-      <div className="absolute bottom-0 left-0 right-0 p-6 bg-gradient-to-t from-background via-background to-transparent pointer-events-none">
+      <div className="absolute bottom-0 left-0 right-0 p-6 bg-gradient-to-t from-background via-background to-transparent pointer-events-none z-10">
         <div className="max-w-2xl mx-auto pointer-events-auto">
           <div className="relative group">
             <div className="absolute -inset-0.5 bg-gradient-to-r from-primary/20 to-primary/5 rounded-2xl blur opacity-30 group-focus-within:opacity-100 transition-opacity" />

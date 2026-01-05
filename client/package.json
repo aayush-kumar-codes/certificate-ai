@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "build": "next build",
-    "dev": "next dev",
+    "dev": "npx @react-grab/cursor@latest && next dev",
     "lint": "eslint .",
     "start": "next start"
   },
