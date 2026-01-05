@@ -1,7 +1,7 @@
 "use client"
 
 import * as React from "react"
-import { Send, User, Bot, Sparkles, Paperclip, Loader2 } from "lucide-react"
+import { Send, User, Bot, Paperclip, Loader2 } from "lucide-react"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { useChatStore, type ChatMessage, type ChatStore } from "@/lib/store"
 import { askQuestion } from "@/lib/api"
@@ -183,12 +183,6 @@ export function ChatInterface() {
                 >
                   {msg.content}
                 </div>
-                {"reasoning" in msg && msg.reasoning && (
-                  <div className="flex items-center gap-1.5 px-2 text-[10px] text-muted-foreground font-mono">
-                    <Sparkles className="size-3" />
-                    <span>Agent Reflection: {msg.reasoning}</span>
-                  </div>
-                )}
               </div>
               {msg.role === "user" && (
                 <div className="size-8 rounded-full bg-muted flex items-center justify-center text-muted-foreground shrink-0 border border-border">
