@@ -7,7 +7,7 @@ import { pinecone } from "./pineconedb.js";
 import { RecursiveCharacterTextSplitter } from "@langchain/textsplitters";
 
 const embeddings = new OpenAIEmbeddings({
-  model: "text-embedding-3-small",
+  model: "text-embedding-3-large",
   dimensions: 1024,
   openAIApiKey: process.env.OPENAI_API_KEY,
 });

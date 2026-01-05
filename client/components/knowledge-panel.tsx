@@ -4,72 +4,108 @@ import * as React from "react"
 import { FileText, Plus, Upload, X, Loader2 } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { ScrollArea } from "@/components/ui/scroll-area"
-
-interface Certificate {
-  id: string
-  name: string
-  status: "Pending" | "Processing" | "Evaluated" | "In Review"
-  score: number
-  file?: File
-  extractedText?: string
-}
+import {
+  useCertificateStore,
+  useChatStore,
+  type Certificate,
+} from "@/lib/store"
+import { uploadPDF, askQuestion } from "@/lib/api"
 
 export function KnowledgePanel() {
-  const [certificates, setCertificates] = React.useState<Certificate[]>([
-    { id: "1", name: "ISO_27001_Compliance.pdf", status: "Evaluated", score: 92 },
-    { id: "2", name: "SOC2_Type_II_2025.pdf", status: "In Review", score: 78 },
-  ])
+  const certificates = useCertificateStore((state) => state.certificates)
+  const addCertificate = useCertificateStore((state) => state.addCertificate)
+  const updateCertificate = useCertificateStore((state) => state.updateCertificate)
+  const updateLoadingMessage = useCertificateStore(
+    (state) => state.updateLoadingMessage,
+  )
+  const removeCertificate = useCertificateStore((state) => state.removeCertificate)
+  const addMessage = useChatStore((state) => state.addMessage)
+  const setChatLoading = useChatStore((state) => state.setLoading)
+  const chatHistory = useChatStore((state) => state.chatHistory)
+
   const [isDragging, setIsDragging] = React.useState(false)
 
-  const extractTextFromPDF = async (file: File): Promise<string> => {
-    return new Promise((resolve) => {
-      const reader = new FileReader()
-      reader.onload = async (e) => {
-        try {
-          const typedarray = new Uint8Array(e.target?.result as ArrayBuffer)
-          const pdfjsLib = await import("pdfjs-dist")
-          pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.js`
-
-          const pdf = await pdfjsLib.getDocument(typedarray).promise
-          let fullText = ""
-          for (let i = 1; i <= pdf.numPages; i++) {
-            const page = await pdf.getPage(i)
-            const textContent = await page.getTextContent()
-            const pageText = textContent.items.map((item: any) => item.str).join(" ")
-            fullText += pageText + "\n\n"
-          }
-          console.log("[v0] Extracted text length:", fullText.length)
-          resolve(fullText.slice(0, 5000))
-        } catch (error) {
-          console.error("[v0] PDF extraction error:", error)
-          resolve("Failed to extract text. Check console for details.")
-        }
-      }
-      reader.readAsArrayBuffer(file)
-    })
-  }
-
   const processFiles = async (files: FileList) => {
-    const newCerts: Certificate[] = []
-
     for (const file of Array.from(files)) {
       if (file.type === "application/pdf") {
         const id = `cert-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`
         const cert: Certificate = {
           id,
           name: file.name,
-          status: "Processing",
+          status: "Uploading",
           score: 0,
-          file,
+          loadingMessage: "Uploading PDF...",
         }
-        newCerts.push(cert)
-        setCertificates((prev) => [...prev, cert])
 
-        // Extract text asynchronously
-        const extractedText = await extractTextFromPDF(file)
-        setCertificates((prev) =>
-          prev.map((c) => (c.id === id ? { ...c, extractedText, status: "Pending" as const } : c)),
-        )
+        addCertificate(cert)
+
+        try {
+          // Upload PDF with progress updates
+          await uploadPDF(file, (message) => {
+            updateLoadingMessage(id, message)
+            if (message === "Processing PDF...") {
+              updateCertificate(id, { status: "Processing" })
+            } else if (message === "Embedding document to knowledge base...") {
+              updateCertificate(id, { status: "Embedding" })
+            }
+          })
+
+          // Update to evaluating status
+          updateCertificate(id, {
+            status: "Evaluating",
+            loadingMessage: "Evaluating certificate...",
+          })
+
+          // Auto-trigger evaluation
+          const evaluationPrompt =
+            "Evaluate the uploaded certificate and provide a summary of its key information, compliance status, and any important findings."
+
+          setChatLoading(true, "Evaluating certificate...")
+
+          const response = await askQuestion(
+            evaluationPrompt,
+            chatHistory(),
+            (message) => {
+              updateLoadingMessage(id, message)
+              setChatLoading(true, message)
+              if (message === "Analyzing compliance requirements...") {
+                updateCertificate(id, { status: "Analyzing" })
+              } else if (message === "Generating evaluation report...") {
+                updateCertificate(id, { status: "Generating" })
+              }
+            },
+          )
+
+          // Add AI response to chat
+          addMessage({
+            role: "bot",
+            content: response.answer,
+            reasoning: "Certificate evaluation completed.",
+          })
+
+          // Update certificate to evaluated
+          updateCertificate(id, {
+            status: "Evaluated",
+            loadingMessage: undefined,
+          })
+
+          setChatLoading(false)
+        } catch (error) {
+          const errorMessage =
+            error instanceof Error ? error.message : "Upload failed"
+          updateCertificate(id, {
+            status: "Error",
+            loadingMessage: undefined,
+            uploadError: errorMessage,
+          })
+          setChatLoading(false)
+
+          // Add error message to chat
+          addMessage({
+            role: "bot",
+            content: `Failed to process ${file.name}: ${errorMessage}`,
+          })
+        }
       }
     }
   }
@@ -104,9 +140,6 @@ export function KnowledgePanel() {
     }
   }
 
-  const removeCertificate = (id: string) => {
-    setCertificates((prev) => prev.filter((c) => c.id !== id))
-  }
 
   return (
     <div className="flex h-full flex-col">
@@ -137,7 +170,7 @@ export function KnowledgePanel() {
                       {cert.name}
                     </span>
                     <div className="flex items-center gap-1">
-                      {cert.status === "Processing" ? (
+                      {cert.status !== "Evaluated" && cert.status !== "Error" ? (
                         <Loader2 className="size-3 animate-spin text-primary" />
                       ) : (
                         <Badge
@@ -156,13 +189,12 @@ export function KnowledgePanel() {
                     </div>
                   </div>
                   <span className="text-[10px] text-muted-foreground italic">
-                    {cert.status === "Processing"
-                      ? "Extracting text..."
-                      : cert.status === "Evaluated"
+                    {cert.loadingMessage ||
+                      (cert.status === "Evaluated"
                         ? "Reasoning complete"
-                        : cert.extractedText
-                          ? `Extracted ${cert.extractedText.length} characters`
-                          : "Waiting for context..."}
+                        : cert.status === "Error"
+                          ? cert.uploadError || cert.evaluationError || "Error occurred"
+                          : "Waiting for context...")}
                   </span>
                 </div>
               ))}

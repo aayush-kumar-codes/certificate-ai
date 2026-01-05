@@ -1,56 +1,72 @@
 "use client"
 
 import * as React from "react"
-import { Send, User, Bot, Sparkles, Paperclip } from "lucide-react"
+import { Send, User, Bot, Sparkles, Paperclip, Loader2 } from "lucide-react"
 import { ScrollArea } from "@/components/ui/scroll-area"
-
-const INITIAL_MESSAGES = [
-  {
-    role: "bot",
-    content:
-      "Welcome to Certificate Validator AI. I'm an agentic evaluation system ready to help you validate certificates. Upload your PDF certificates using the sidebar, and I'll analyze them based on your requirements.",
-    reasoning: "Initializing agent context. Ready to receive certificate uploads and user instructions.",
-  },
-  {
-    role: "user",
-    content: "I've uploaded two certificates. Can you tell me what information you've extracted from them?",
-  },
-  {
-    role: "bot",
-    content:
-      "I've successfully extracted text from both certificates:\n\n1. **ISO_27001_Compliance.pdf** - Contains compliance information including audit dates, security controls, and certification scope.\n\n2. **SOC2_Type_II_2025.pdf** - Includes control objectives, test results, and attestation details.\n\nBoth documents are ready for evaluation. What specific criteria would you like me to validate against?",
-    reasoning: "Analyzed uploaded PDFs. Detected key sections and metadata. Awaiting evaluation criteria from user.",
-  },
-]
+import { useChatStore, type ChatMessage, type ChatStore } from "@/lib/store"
+import { askQuestion } from "@/lib/api"
 
 export function ChatInterface() {
   const [input, setInput] = React.useState("")
-  const [messages, setMessages] = React.useState(INITIAL_MESSAGES)
+  const messages = useChatStore((state: ChatStore) => state.messages)
+  const isLoading = useChatStore((state: ChatStore) => state.isLoading)
+  const loadingMessage = useChatStore((state: ChatStore) => state.loadingMessage)
+  const addMessage = useChatStore((state: ChatStore) => state.addMessage)
+  const setLoading = useChatStore((state: ChatStore) => state.setLoading)
+  const chatHistory = useChatStore((state: ChatStore) => state.chatHistory)
+
   const scrollRef = React.useRef<HTMLDivElement>(null)
+
+  // Add welcome message on mount if no messages
+  React.useEffect(() => {
+    if (messages.length === 0) {
+      addMessage({
+        role: "bot",
+        content:
+          "Welcome to Certificate Validator AI. I'm an agentic evaluation system ready to help you validate certificates. Upload your PDF certificates using the sidebar, and I'll analyze them based on your requirements.",
+        reasoning: "Initializing agent context. Ready to receive certificate uploads and user instructions.",
+      })
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   React.useEffect(() => {
     if (scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight
     }
-  }, [messages])
+  }, [messages, isLoading])
 
-  const handleSend = () => {
-    if (!input.trim()) return
+  const handleSend = async () => {
+    if (!input.trim() || isLoading) return
 
     const userMessage = { role: "user" as const, content: input }
-    setMessages((prev) => [...prev, userMessage])
+    addMessage(userMessage)
+    const question = input
     setInput("")
 
-    // Simulate agent response
-    setTimeout(() => {
-      const botMessage = {
-        role: "bot" as const,
-        content:
-          "I understand your request. Let me analyze the uploaded certificates against that criteria. I'll need a moment to process the documents and provide a comprehensive evaluation.",
+    try {
+      setLoading(true, "Evaluating certificate...")
+
+      const response = await askQuestion(question, chatHistory(), (message) => {
+        setLoading(true, message)
+      })
+
+      addMessage({
+        role: "bot",
+        content: response.answer,
         reasoning: "Processing user query. Cross-referencing certificate content with evaluation requirements.",
-      }
-      setMessages((prev) => [...prev, botMessage])
-    }, 1000)
+      })
+
+      setLoading(false)
+    } catch (error) {
+      const errorMessage =
+        error instanceof Error ? error.message : "Failed to get response"
+      addMessage({
+        role: "bot",
+        content: `Error: ${errorMessage}`,
+      })
+      setLoading(false)
+    }
   }
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -82,7 +98,7 @@ export function ChatInterface() {
     <div className="flex-1 flex flex-col h-full bg-background relative">
       <ScrollArea className="flex-1 px-6 pt-20" ref={scrollRef}>
         <div className="max-w-2xl mx-auto space-y-8 pb-32">
-          {messages.map((msg, i) => (
+          {messages.map((msg: ChatMessage, i: number) => (
             <div key={i} className={`flex gap-4 ${msg.role === "user" ? "justify-end" : ""}`}>
               {msg.role === "bot" && (
                 <div className="size-8 rounded-full bg-primary flex items-center justify-center text-primary-foreground shrink-0">
@@ -111,6 +127,19 @@ export function ChatInterface() {
               )}
             </div>
           ))}
+          {isLoading && (
+            <div className="flex gap-4">
+              <div className="size-8 rounded-full bg-primary flex items-center justify-center text-primary-foreground shrink-0">
+                <Bot className="size-4" />
+              </div>
+              <div className="flex flex-col gap-2 max-w-[85%]">
+                <div className="rounded-2xl px-4 py-3 text-sm leading-relaxed bg-card border border-border flex items-center gap-2">
+                  <Loader2 className="size-4 animate-spin text-primary" />
+                  <span>{loadingMessage || "Processing..."}</span>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       </ScrollArea>
 
@@ -137,7 +166,7 @@ export function ChatInterface() {
                 <button
                   onClick={handleSend}
                   className="p-2 bg-primary text-primary-foreground rounded-xl hover:bg-primary/90 transition-all disabled:opacity-50"
-                  disabled={!input.trim()}
+                  disabled={!input.trim() || isLoading}
                 >
                   <Send className="size-4" />
                 </button>
