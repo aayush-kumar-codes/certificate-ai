@@ -20,19 +20,6 @@ export function ChatInterface() {
   const messagesEndRef = React.useRef<HTMLDivElement>(null)
   const viewportRef = React.useRef<HTMLElement | null>(null)
 
-  // Add welcome message on mount if no messages
-  React.useEffect(() => {
-    if (messages.length === 0) {
-      addMessage({
-        role: "bot",
-        content:
-          "Welcome to Certificate Validator AI. I'm an agentic evaluation system ready to help you validate certificates. Upload your PDF or image certificates using the sidebar, and I'll analyze them based on your requirements.",
-        reasoning: "Initializing agent context. Ready to receive certificate uploads and user instructions.",
-      })
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
-
   // Find and store viewport reference when component mounts or scrollRef changes
   React.useEffect(() => {
     const findViewport = () => {
