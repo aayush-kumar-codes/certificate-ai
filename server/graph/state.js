@@ -50,6 +50,16 @@ export const CertificateEvaluationState = Annotation.Root({
   // Thread/session ID for state persistence
   threadId: Annotation({
     default: () => null
+  }),
+  
+  // Thinking/reasoning result (internal, not sent to user)
+  thinking: Annotation({
+    default: () => null
+  }),
+  
+  // Flag to indicate if conversation should continue
+  shouldContinue: Annotation({
+    default: () => true
   })
 });
 

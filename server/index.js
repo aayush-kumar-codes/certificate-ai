@@ -142,10 +142,33 @@ app.post("/ask", async (req, res) => {
         extractedFields: result.extractedFields
       });
     } else {
-      // Fallback to original askQuestion for backward compatibility
+      // No threadId - handle general questions or create new conversation
+      // For certificate validation, user should upload first, but we can handle general questions
       const { chatHistory = [] } = req.body;
-      const result = await askQuestion(question, chatHistory);
-      res.json(result);
+      
+      // Check if it's a general question (hi, hello, etc.)
+      const lowerQuestion = question.toLowerCase().trim();
+      const isGeneralQuestion = 
+        lowerQuestion.startsWith("hi") || 
+        lowerQuestion.startsWith("hello") || 
+        lowerQuestion.startsWith("hey");
+      
+      if (isGeneralQuestion) {
+        // For general questions without threadId, use the agent
+        const result = await askQuestion(question, chatHistory);
+        return res.json({
+          answer: result.answer,
+          threadId: null,
+          status: "general_conversation"
+        });
+      } else {
+        // For certificate-related questions without threadId, suggest uploading
+        return res.json({
+          answer: "I'd be happy to help you validate a certificate! To get started, please upload a certificate document first. Once you upload it, I'll help you set up the validation criteria. 📄",
+          threadId: null,
+          status: "awaiting_upload"
+        });
+      }
     }
   } catch (err) {
     console.error(err);
