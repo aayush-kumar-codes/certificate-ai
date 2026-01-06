@@ -74,8 +74,9 @@ export function KnowledgePanel() {
           }
 
           // Update certificate status based on upload response
+          // After successful upload, set to "Evaluated" to hide loader and show X icon
           updateCertificate(id, {
-            status: uploadResponse.status === "awaiting_criteria" ? "Processing" : "Evaluated",
+            status: "Evaluated",
             loadingMessage: undefined,
           })
 
@@ -153,7 +154,13 @@ export function KnowledgePanel() {
               {certificates.map((cert) => (
                 <div
                   key={cert.id}
-                  className="group flex flex-col gap-1 p-3 rounded-lg border border-border/50 bg-background/50 hover:border-primary/50 transition-all"
+                  className={`group flex flex-col gap-1 p-3 rounded-lg border transition-all ${
+                    cert.status === "Evaluated"
+                      ? "border-primary border-2 bg-primary/5"
+                      : cert.status === "Error"
+                        ? "border-destructive/50 border bg-destructive/5"
+                        : "border-border/50 bg-background/50 hover:border-primary/50"
+                  }`}
                 >
                   <div className="flex items-center justify-between gap-2">
                     <span className="text-xs font-medium truncate flex-1" title={cert.name}>
@@ -162,30 +169,32 @@ export function KnowledgePanel() {
                     <div className="flex items-center gap-1">
                       {cert.status !== "Evaluated" && cert.status !== "Error" ? (
                         <Loader2 className="size-3 animate-spin text-primary" />
-                      ) : (
+                      ) : cert.status === "Error" ? (
                         <Badge
-                          variant={cert.status === "Evaluated" ? "default" : "outline"}
+                          variant="outline"
                           className="text-[10px] h-4 px-1"
                         >
-                          {cert.score > 0 ? `${cert.score}%` : cert.status}
+                          {cert.status}
                         </Badge>
-                      )}
+                      ) : null}
                       <button
                         onClick={() => removeCertificate(cert.id)}
-                        className="opacity-0 group-hover:opacity-100 p-0.5 hover:bg-destructive/10 rounded text-destructive transition-opacity"
+                        className={`p-0.5 hover:bg-destructive/10 rounded text-destructive transition-opacity ${
+                          cert.status === "Evaluated" ? "opacity-100" : "opacity-0 group-hover:opacity-100"
+                        }`}
                       >
                         <X className="size-3" />
                       </button>
                     </div>
                   </div>
-                  <span className="text-[10px] text-muted-foreground italic">
-                    {cert.loadingMessage ||
-                      (cert.status === "Evaluated"
-                        ? "Reasoning complete"
-                        : cert.status === "Error"
+                  {cert.status !== "Evaluated" && (
+                    <span className="text-[10px] text-muted-foreground italic">
+                      {cert.loadingMessage ||
+                        (cert.status === "Error"
                           ? cert.uploadError || cert.evaluationError || "Error occurred"
                           : "Waiting for context...")}
-                  </span>
+                    </span>
+                  )}
                 </div>
               ))}
             </div>
