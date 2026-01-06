@@ -18,15 +18,18 @@ export async function uploadPDF(
   file: File,
   onProgress?: (message: string) => void,
 ): Promise<UploadResponse> {
+  const isImage = file.type.startsWith("image/")
+  const fileType = isImage ? "Image" : "PDF"
+
   if (onProgress) {
-    onProgress("Uploading PDF...")
+    onProgress(`Uploading ${fileType}...`)
   }
 
   const formData = new FormData()
   formData.append("pdf", file)
 
   if (onProgress) {
-    onProgress("Processing PDF...")
+    onProgress(`Processing ${fileType}...`)
   }
 
   try {
@@ -48,7 +51,7 @@ export async function uploadPDF(
     return data
   } catch (error) {
     throw new Error(
-      error instanceof Error ? error.message : "Failed to upload PDF",
+      error instanceof Error ? error.message : `Failed to upload ${fileType}`,
     )
   }
 }

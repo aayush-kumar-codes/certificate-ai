@@ -3,24 +3,42 @@ import dotenv from "dotenv";
 import { upload } from "./utils/upload.js";
 import { askQuestion } from "./askQuestion.js";
 import { embedPdfToPinecone } from "./utils/process-pdf.js";
+import { embedImageToPinecone } from "./utils/process-image.js";
 import cors from "cors";
 dotenv.config();
 
 const app = express();
 app.use(express.json());
 app.use(cors( {
-  origin: "http://localhost:3001",
+  origin: "http://116.202.210.102:3000",
   methods: ["GET", "POST", "PUT", "DELETE"],
   allowedHeaders: ["Content-Type", "Authorization"],
 }));
 app.post("/upload", upload.single("pdf"), async (req, res) => {
   try {
-    const path = req.file.path;
-    await embedPdfToPinecone(path);
-    res.json({ message: "PDF embedded successfully" });
+    const file = req.file;
+
+    if (!file) {
+      return res.status(400).json({ error: "No file uploaded" });
+    }
+
+    const path = file.path;
+    const mimetype = file.mimetype || "";
+
+    if (mimetype === "application/pdf") {
+      await embedPdfToPinecone(path);
+      return res.json({ message: "PDF embedded successfully" });
+    }
+
+    if (mimetype.startsWith("image/")) {
+      await embedImageToPinecone(path);
+      return res.json({ message: "Image embedded successfully" });
+    }
+
+    return res.status(400).json({ error: "Unsupported file type" });
   } catch (err) {
     console.error(err);
-    res.status(500).json({ error: "Failed to process PDF" });
+    res.status(500).json({ error: "Failed to process file" });
   }
 });
 

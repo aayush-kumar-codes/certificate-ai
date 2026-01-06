@@ -27,23 +27,27 @@ export function KnowledgePanel() {
 
   const processFiles = async (files: FileList) => {
     for (const file of Array.from(files)) {
-      if (file.type === "application/pdf") {
+      const isPDF = file.type === "application/pdf"
+      const isImage = file.type.startsWith("image/")
+      
+      if (isPDF || isImage) {
+        const fileType = isPDF ? "PDF" : "Image"
         const id = `cert-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`
         const cert: Certificate = {
           id,
           name: file.name,
           status: "Uploading",
           score: 0,
-          loadingMessage: "Uploading PDF...",
+          loadingMessage: `Uploading ${fileType}...`,
         }
 
         addCertificate(cert)
 
         try {
-          // Upload PDF with progress updates
+          // Upload file with progress updates
           await uploadPDF(file, (message) => {
             updateLoadingMessage(id, message)
-            if (message === "Processing PDF...") {
+            if (message === `Processing ${fileType}...` || message === "Processing PDF..." || message === "Processing Image...") {
               updateCertificate(id, { status: "Processing" })
             } else if (message === "Embedding document to knowledge base...") {
               updateCertificate(id, { status: "Embedding" })
@@ -115,7 +119,7 @@ export function KnowledgePanel() {
   const handleFileUpload = () => {
     const input = document.createElement("input")
     input.type = "file"
-    input.accept = ".pdf"
+    input.accept = ".pdf,image/*"
     input.multiple = true
     input.onchange = (e) => {
       const files = (e.target as HTMLInputElement).files
@@ -215,7 +219,7 @@ export function KnowledgePanel() {
             >
               <div className="flex flex-col items-center gap-2 text-muted-foreground group-hover:text-primary">
                 <Upload className="size-5" />
-                <span className="text-xs font-medium">Upload Certificate PDF</span>
+                <span className="text-xs font-medium">Upload Certificate (PDF/Image)</span>
                 <span className="text-[10px] opacity-70">
                   {isDragging ? "Drop files here" : "Click or drag files here"}
                 </span>

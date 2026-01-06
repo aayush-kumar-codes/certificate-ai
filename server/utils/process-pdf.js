@@ -13,6 +13,21 @@ const embeddings = new OpenAIEmbeddings({
 });
 
 async function embedPdfToPinecone(pdfPath) {
+  const index = pinecone.Index(process.env.PINECONE_INDEX);
+  
+  // Clear existing vectors before adding new ones
+  try {
+    console.log("🗑️ Clearing existing vectors from Pinecone index...");
+    await index.deleteAll();
+  } catch (error) {
+    // Index might be empty, which is fine - continue with embedding
+    if (error.name === "PineconeNotFoundError" || error.status === 404) {
+      console.log("ℹ️ Index is empty or already cleared, proceeding with new upload...");
+    } else {
+      throw error;
+    }
+  }
+
   const dataBuffer = fs.readFileSync(pdfPath);
 
   // ✅ This will NOT trigger the test file read
@@ -31,8 +46,6 @@ async function embedPdfToPinecone(pdfPath) {
     pageContent: doc.pageContent,
     metadata: { id: `pdf-chunk-${i}` },
   }));
-
-  const index = pinecone.Index(process.env.PINECONE_INDEX);
 
   await PineconeStore.fromDocuments(docs, embeddings, {
     pineconeIndex: index,

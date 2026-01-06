@@ -1,4 +1,4 @@
-import { EvalDashboard } from "@/components/eval-dashboard"
+import { EvalDashboardWrapper } from "@/components/eval-dashboard-wrapper"
 
 export default function Page() {
   return (
@@ -14,7 +14,7 @@ export default function Page() {
           <span>Agent Active</span>
         </div>
       </header>
-      <EvalDashboard />
+      <EvalDashboardWrapper />
     </main>
   )
 }

@@ -26,7 +26,7 @@ export function ChatInterface() {
       addMessage({
         role: "bot",
         content:
-          "Welcome to Certificate Validator AI. I'm an agentic evaluation system ready to help you validate certificates. Upload your PDF certificates using the sidebar, and I'll analyze them based on your requirements.",
+          "Welcome to Certificate Validator AI. I'm an agentic evaluation system ready to help you validate certificates. Upload your PDF or image certificates using the sidebar, and I'll analyze them based on your requirements.",
         reasoning: "Initializing agent context. Ready to receive certificate uploads and user instructions.",
       })
     }
@@ -151,7 +151,7 @@ export function ChatInterface() {
   const handleFileAttach = () => {
     const input = document.createElement("input")
     input.type = "file"
-    input.accept = ".pdf"
+    input.accept = ".pdf,image/*"
     input.multiple = true
     input.onchange = (e) => {
       const files = (e.target as HTMLInputElement).files
