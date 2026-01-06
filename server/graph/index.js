@@ -19,15 +19,63 @@ function routeConversation(state) {
   const lastMessage = messages[messages.length - 1];
   const hasNewUserMessage = lastMessage && lastMessage.role === "user";
   
-  // If we have criteria and are ready, and there's a new user message requesting validation, go to validation
+  // Check if the last assistant message indicates we answered a question (not proceeding to validation)
+  const lastAssistantMessage = messages.filter(m => m.role === "assistant").pop();
+  const answeredQuestion = lastAssistantMessage && (
+    lastAssistantMessage.content.includes("Your last message was") ||
+    lastAssistantMessage.content.includes("You said") ||
+    lastAssistantMessage.content.includes("You asked") ||
+    lastAssistantMessage.content.includes("previous message") ||
+    lastAssistantMessage.content.includes("last message") ||
+    // Check if it's a general conversational response (not validation-related)
+    (!lastAssistantMessage.content.includes("validate") && 
+     !lastAssistantMessage.content.includes("criteria") &&
+     !lastAssistantMessage.content.includes("proceed"))
+  );
+  
+  // If we just answered a general question, don't route to validation
+  if (answeredQuestion) {
+    return END;
+  }
+  
+  // If we have criteria and are ready, check if user explicitly requested validation
   if (status === STATUS.READY_TO_VALIDATE && criteria && hasNewUserMessage) {
-    const hasCriteria = (
-      (criteria.agencyName !== null && criteria.agencyName !== false) ||
-      (criteria.expiryDate !== null && criteria.expiryDate !== false) ||
-      (criteria && Object.keys(criteria).length > 0)
-    );
-    if (hasCriteria) {
-      return "validate";
+    const userMessage = (lastMessage.content || "").toLowerCase();
+    
+    // Check if message is certificate-related (not a general question)
+    // The conversation node should have classified it, but we'll also check here
+    const isGeneralOrMeta = 
+      userMessage.includes("what is") ||
+      userMessage.includes("what was") ||
+      userMessage.includes("how are") ||
+      userMessage.includes("tell me about") ||
+      userMessage.includes("explain") ||
+      userMessage.startsWith("hi") ||
+      userMessage.startsWith("hello");
+    
+    const wantsValidation = 
+      !isGeneralOrMeta && (
+        userMessage.includes("yes") ||
+        userMessage.includes("proceed") ||
+        userMessage.includes("validate") ||
+        userMessage.includes("go ahead") ||
+        userMessage.includes("do it") ||
+        userMessage.includes("start") ||
+        userMessage.includes("begin") ||
+        // If it's clearly certificate-related and not a question, proceed
+        (userMessage.includes("certificate") && !userMessage.includes("?"))
+      );
+    
+    // Only route to validation if user explicitly wants it (not asking a question)
+    if (wantsValidation) {
+      const hasCriteria = (
+        (criteria.agencyName !== null && criteria.agencyName !== false) ||
+        (criteria.expiryDate !== null && criteria.expiryDate !== false) ||
+        (criteria && Object.keys(criteria).length > 0)
+      );
+      if (hasCriteria) {
+        return "validate";
+      }
     }
   }
   
@@ -86,15 +134,45 @@ function routeFromState(state) {
     return "upload";
   }
   
-  // Check if we need validation (only if we have criteria and are ready)
+  // Check if we need validation (only if we have criteria and are ready AND user wants it)
   if (status === STATUS.READY_TO_VALIDATE && criteria) {
-    const hasCriteria = (
-      (criteria.agencyName !== null && criteria.agencyName !== false) ||
-      (criteria.expiryDate !== null && criteria.expiryDate !== false) ||
-      (criteria && Object.keys(criteria).length > 0)
-    );
-    if (hasCriteria) {
-      return "validate";
+    const lastMessage = messages[messages.length - 1];
+    const userMessage = lastMessage && lastMessage.role === "user" 
+      ? (lastMessage.content || "").toLowerCase() 
+      : "";
+    
+    // Only auto-validate if user explicitly requested it (not if they're asking a question)
+    const wantsValidation = 
+      userMessage.includes("yes") ||
+      userMessage.includes("proceed") ||
+      userMessage.includes("validate") ||
+      userMessage.includes("go ahead") ||
+      userMessage.includes("do it") ||
+      userMessage.includes("start") ||
+      userMessage.includes("begin");
+    
+    // Don't auto-validate if user is asking a question
+    const isAskingQuestion = 
+      userMessage.includes("what") ||
+      userMessage.includes("how") ||
+      userMessage.includes("why") ||
+      userMessage.includes("when") ||
+      userMessage.includes("where") ||
+      userMessage.includes("who") ||
+      userMessage.includes("which") ||
+      userMessage.includes("tell me") ||
+      userMessage.includes("show me") ||
+      userMessage.includes("explain");
+    
+    if (wantsValidation && !isAskingQuestion) {
+      const hasCriteria = (
+        (criteria.agencyName !== null && criteria.agencyName !== false) ||
+        (criteria.expiryDate !== null && criteria.expiryDate !== false) ||
+        (criteria && Object.keys(criteria).length > 0)
+      );
+      if (hasCriteria) {
+        return "validate";
+      }
     }
   }
   

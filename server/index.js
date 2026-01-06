@@ -85,7 +85,17 @@ app.post("/upload", upload.single("pdf"), async (req, res) => {
 });
 
 app.post("/ask", async (req, res) => {
-  const { question, threadId } = req.body;
+  const { question, threadId, chatHistory } = req.body;
+  
+  // Log all incoming requests for debugging
+  console.log("=== /ask Request ===");
+  console.log("Question:", question);
+  console.log("ThreadId:", threadId || "none");
+  console.log("ChatHistory provided:", chatHistory !== undefined);
+  console.log("ChatHistory type:", Array.isArray(chatHistory) ? "array" : typeof chatHistory);
+  console.log("ChatHistory length:", Array.isArray(chatHistory) ? chatHistory.length : "N/A");
+  console.log("Full request body keys:", Object.keys(req.body));
+  
   try {
     if (!question) {
       return res.status(400).json({ error: "Question is required" });
@@ -93,13 +103,36 @@ app.post("/ask", async (req, res) => {
 
     // If threadId is provided, use certificate evaluation graph
     if (threadId) {
+      console.log("=== Using ThreadId Path ===");
+      console.log("ThreadId:", threadId);
+      
       // Load existing state
       let currentState = getState(threadId);
       
       if (!currentState) {
+        console.log("❌ Thread not found in state storage");
         return res.status(404).json({ 
           error: "Thread not found. Please upload a document first." 
         });
+      }
+
+      // Log existing chat history from state storage
+      const existingMessages = currentState.messages || [];
+      console.log("✅ Thread found in state storage");
+      console.log("📋 Chat History from State Storage:");
+      console.log("  - Total messages:", existingMessages.length);
+      console.log("  - Status:", currentState.status);
+      console.log("  - Has uploaded document:", !!currentState.uploadedDocument);
+      console.log("  - Has criteria:", !!currentState.criteria);
+      console.log("  - Has validation result:", !!currentState.validationResult);
+      
+      if (existingMessages.length > 0) {
+        console.log("  - Message history preview:");
+        existingMessages.slice(-3).forEach((msg, idx) => {
+          console.log(`    [${existingMessages.length - 3 + idx}] ${msg.role}: ${msg.content?.substring(0, 50)}...`);
+        });
+      } else {
+        console.log("  - ⚠️ No previous messages in state");
       }
 
       // Add user message to state
@@ -110,6 +143,8 @@ app.post("/ask", async (req, res) => {
           content: question
         }
       ];
+      
+      console.log("➕ Added new user message. Total messages now:", currentState.messages.length);
 
       // Save state before running graph
       saveState(threadId, currentState);
@@ -133,18 +168,45 @@ app.post("/ask", async (req, res) => {
 
       // Get the last assistant message
       const lastMessage = result.messages[result.messages.length - 1];
+      
+      // Log final state after processing
+      console.log("✅ Conversation completed");
+      console.log("  - Final message count:", result.messages.length);
+      console.log("  - Final status:", result.status);
+      console.log("  - Last message role:", lastMessage?.role);
+      console.log("  - Response length:", lastMessage?.content?.length || 0);
 
       return res.json({
         answer: lastMessage?.content || "No response generated",
         threadId: threadId,
         status: result.status,
         validationResult: result.validationResult,
-        extractedFields: result.extractedFields
+        extractedFields: result.extractedFields,
+        messageCount: result.messages.length, // Include for debugging
+        hasHistory: result.messages.length > 1 // Indicates conversation history exists
       });
     } else {
       // No threadId - handle general questions or create new conversation
       // For certificate validation, user should upload first, but we can handle general questions
-      const { chatHistory = [] } = req.body;
+      const chatHistoryArray = chatHistory || [];
+      
+      // Verify if chatHistory exists and has content
+      const hasHistory = Array.isArray(chatHistoryArray) && chatHistoryArray.length > 0;
+      console.log("=== No ThreadId - Using Frontend Chat History ===");
+      console.log("📋 Chat History from Request Body:");
+      console.log("  - Has history:", hasHistory);
+      console.log("  - History length:", chatHistoryArray?.length || 0);
+      console.log("  - History provided in request:", chatHistory !== undefined);
+      console.log("  - History type:", Array.isArray(chatHistoryArray) ? "array" : typeof chatHistoryArray);
+      
+      if (hasHistory) {
+        console.log("  - History preview (last 3 messages):");
+        chatHistoryArray.slice(-3).forEach((msg, idx) => {
+          console.log(`    [${chatHistoryArray.length - 3 + idx}] ${msg.role}: ${msg.content?.substring(0, 50)}...`);
+        });
+      } else {
+        console.log("  - ⚠️ No chat history provided - starting new conversation");
+      }
       
       // Check if it's a general question (hi, hello, etc.)
       const lowerQuestion = question.toLowerCase().trim();
@@ -155,18 +217,21 @@ app.post("/ask", async (req, res) => {
       
       if (isGeneralQuestion) {
         // For general questions without threadId, use the agent
-        const result = await askQuestion(question, chatHistory);
+        console.log("Calling askQuestion with history:", hasHistory ? `${chatHistoryArray.length} messages` : "empty");
+        const result = await askQuestion(question, hasHistory ? chatHistoryArray : []);
         return res.json({
           answer: result.answer,
           threadId: null,
-          status: "general_conversation"
+          status: "general_conversation",
+          hasHistory: hasHistory // Include in response for debugging
         });
       } else {
         // For certificate-related questions without threadId, suggest uploading
         return res.json({
           answer: "I'd be happy to help you validate a certificate! To get started, please upload a certificate document first. Once you upload it, I'll help you set up the validation criteria. 📄",
           threadId: null,
-          status: "awaiting_upload"
+          status: "awaiting_upload",
+          hasHistory: hasHistory // Include in response for debugging
         });
       }
     }

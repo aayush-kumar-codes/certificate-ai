@@ -39,20 +39,92 @@ export async function conversationNode(state) {
     };
   }
 
-  // Handle general conversational questions (hi, hello, chat history, etc.)
-  const isGeneralQuestion = 
-    userMessage.startsWith("hi") || 
-    userMessage.startsWith("hello") || 
-    userMessage.startsWith("hey") ||
-    userMessage.includes("how are you") ||
-    userMessage.includes("what can you do") ||
-    userMessage.includes("chat history") ||
-    userMessage.includes("conversation history") ||
-    userMessage.includes("what did we talk about") ||
-    userMessage.includes("remember") ||
-    userMessage.includes("do you remember");
+  // Dynamically classify the user's question using LLM
+  const classificationPrompt = ChatPromptTemplate.fromMessages([
+    [
+      "system",
+      `You are a message classifier for a certificate validation assistant. Classify the user's message into one of these categories:
 
-  if (isGeneralQuestion) {
+1. "general_question" - General conversational questions, greetings, questions about the conversation itself, or questions not related to certificate validation
+   Examples: "hi", "what is my last message?", "how are you?", "what can you do?", "tell me about yourself"
+
+2. "certificate_related" - Questions or statements about certificate validation, criteria, validation results, or wanting to proceed with validation
+   Examples: "validate based on expiry date", "check the agency name", "what are the validation results?", "yes, proceed", "validate the certificate"
+
+3. "conversation_meta" - Questions about the conversation history, previous messages, or what was discussed
+   Examples: "what did we talk about?", "what was my last message?", "show me the conversation history"
+
+Current context:
+- Document uploaded: ${uploadedDocument ? "Yes" : "No"}
+- Criteria set: ${criteria ? "Yes" : "No"}
+- Validation completed: ${validationResult ? "Yes" : "No"}
+- Status: ${status}
+
+Return ONLY a JSON object with this structure:
+{
+  "category": "general_question" | "certificate_related" | "conversation_meta",
+  "confidence": "high" | "medium" | "low",
+  "reasoning": "brief explanation of why this classification"
+}`
+    ],
+    [
+      "human",
+      `User message: {userMessage}
+
+Conversation context (last 5 messages):
+{recentHistory}
+
+Classify this message.`
+    ]
+  ]);
+
+  let questionClassification = null;
+  let isGeneralQuestion = false;
+  let isConversationMeta = false;
+  
+  try {
+    const recentHistory = messages
+      .slice(-5)
+      .map(msg => `${msg.role}: ${msg.content}`)
+      .join("\n");
+
+    const classificationChain = classificationPrompt.pipe(llm);
+    const classificationResponse = await classificationChain.invoke({
+      userMessage: lastUserMessage.content,
+      recentHistory: recentHistory
+    });
+
+    const classificationText = classificationResponse.content.trim();
+    const cleanedText = classificationText.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim();
+    questionClassification = JSON.parse(cleanedText);
+    
+    isGeneralQuestion = questionClassification.category === "general_question";
+    isConversationMeta = questionClassification.category === "conversation_meta";
+    
+    console.log("Question classification:", {
+      message: lastUserMessage.content.substring(0, 50),
+      category: questionClassification.category,
+      confidence: questionClassification.confidence,
+      reasoning: questionClassification.reasoning
+    });
+  } catch (error) {
+    console.error("Error classifying question:", error);
+    // Fallback: use simple heuristics if classification fails
+    isGeneralQuestion = 
+      userMessage.startsWith("hi") || 
+      userMessage.startsWith("hello") || 
+      userMessage.startsWith("hey") ||
+      userMessage.includes("how are you") ||
+      userMessage.includes("what can you do");
+    isConversationMeta = 
+      userMessage.includes("last message") ||
+      userMessage.includes("previous message") ||
+      userMessage.includes("conversation history") ||
+      userMessage.includes("what did we talk");
+  }
+
+  // Handle general questions or conversation meta questions
+  if (isGeneralQuestion || isConversationMeta) {
     const conversationPrompt = ChatPromptTemplate.fromMessages([
       [
         "system",
@@ -80,6 +152,29 @@ Provide a natural, conversational response. If this is about certificate validat
     const conversationChain = conversationPrompt.pipe(llm);
     
     try {
+      // Check if user is asking about their last message specifically (conversation meta)
+      if (isConversationMeta && messages.length >= 2) {
+        // Find the user's previous message (before the current one)
+        const previousUserMessages = messages
+          .filter(m => m.role === "user")
+          .slice(-2); // Get last 2 user messages
+        
+        if (previousUserMessages.length >= 2) {
+          const actualLastMessage = previousUserMessages[previousUserMessages.length - 2];
+          return {
+            ...state,
+            shouldContinue: true,
+            messages: [
+              ...state.messages,
+              {
+                role: "assistant",
+                content: `Your last message was: "${actualLastMessage.content}"\n\nWould you like me to proceed with validating the certificate now?`
+              }
+            ]
+          };
+        }
+      }
+      
       const conversationHistory = messages
         .slice(-20) // Last 20 messages
         .map(msg => `${msg.role}: ${msg.content}`)
@@ -186,12 +281,43 @@ Generate a brief, natural follow-up question (just the question, no explanation)
     }
   }
 
-  // If criteria already exists and status is ready_to_validate, don't process again
-  if (criteria && status === STATUS.READY_TO_VALIDATE && !userMessage.includes("new") && !userMessage.includes("change")) {
-    return state;
+  // If criteria already exists and status is ready_to_validate, check if user wants to proceed
+  if (criteria && status === STATUS.READY_TO_VALIDATE) {
+    // If user is asking a general question or conversation meta (not requesting validation), answer it
+    if (isGeneralQuestion || isConversationMeta) {
+      // User is asking a question, not requesting validation
+      // The general question handler above should have handled it, but if we reach here, continue processing
+    } else if (questionClassification && questionClassification.category !== "certificate_related") {
+      // Classification says it's not certificate-related, so don't auto-validate
+      // Answer their question or continue conversation
+      return state;
+    } else if (!userMessage.includes("new") && !userMessage.includes("change") && !userMessage.includes("yes") && !userMessage.includes("proceed") && !userMessage.includes("validate") && !userMessage.includes("go ahead")) {
+      // User hasn't explicitly requested validation, so don't auto-validate
+      // Answer their question or continue conversation
+      return state;
+    }
   }
 
-  // Use LLM to extract criteria from user message
+  // If this is a general question or conversation meta, don't extract criteria
+  // (We should have already handled it above, but this is a safety check)
+  if (isGeneralQuestion || isConversationMeta) {
+    // Should have been handled in the general question section above
+    // If we reach here, it means the question wasn't properly handled
+    // Return a helpful response
+    return {
+      ...state,
+      shouldContinue: true,
+      messages: [
+        ...state.messages,
+        {
+          role: "assistant",
+          content: "I'm here to help you with certificate validation! If you have a certificate document, please upload it and I'll help you set up validation criteria. How can I assist you today?"
+        }
+      ]
+    };
+  }
+
+  // Use LLM to extract criteria from user message (only for certificate-related messages)
   const criteriaPrompt = ChatPromptTemplate.fromMessages([
     [
       "system",

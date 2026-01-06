@@ -16,10 +16,19 @@ export function ChatInterface() {
   const setLoading = useChatStore((state: ChatStore) => state.setLoading)
   const threadId = useChatStore((state: ChatStore) => state.threadId)
   const setThreadId = useChatStore((state: ChatStore) => state.setThreadId)
+  const getChatHistory = useChatStore((state: ChatStore) => state.chatHistory)
+  const clearMessages = useChatStore((state: ChatStore) => state.clearMessages)
 
   const scrollRef = React.useRef<HTMLDivElement>(null)
   const messagesEndRef = React.useRef<HTMLDivElement>(null)
   const viewportRef = React.useRef<HTMLElement | null>(null)
+
+  // Clear conversation on page load/refresh
+  React.useEffect(() => {
+    clearMessages()
+    console.log("🔄 Page refreshed - conversation cleared")
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []) // Only run once on mount
 
   // Find and store viewport reference when component mounts or scrollRef changes
   React.useEffect(() => {
@@ -97,14 +106,6 @@ export function ChatInterface() {
   const handleSend = async () => {
     if (!input.trim() || isLoading) return
 
-    if (!threadId) {
-      addMessage({
-        role: "bot",
-        content: "Please upload a certificate document first before asking questions.",
-      })
-      return
-    }
-
     const userMessage = { role: "user" as const, content: input }
     addMessage(userMessage)
     const question = input
@@ -114,10 +115,47 @@ export function ChatInterface() {
       // Use simple loader for follow-up questions
       setLoading(true, "", true)
 
-      const response = await askQuestion(question, threadId, (message) => {
+      // Get chat history (only if no threadId, as threadId-based conversations use state storage)
+      const chatHistory = !threadId ? getChatHistory() : undefined;
+      
+      // Log chat history for debugging
+      console.log("=== Frontend: Sending Question ===");
+      if (threadId) {
+        console.log("🔗 Using ThreadId Mode (State Storage):");
+        console.log("  - ThreadId:", threadId);
+        console.log("  - Frontend messages in store:", messages.length);
+        console.log("  - ℹ️ Chat history is stored on server (state storage)");
+        console.log("  - ℹ️ Server will load history from state storage automatically");
+      } else {
+        console.log("📝 Using Frontend Chat History Mode:");
+        console.log("  - ThreadId: none");
+        console.log("  - Messages in store:", messages.length);
+        console.log("  - ChatHistory to send:", chatHistory ? `${chatHistory.length} messages` : "undefined");
+        if (chatHistory && chatHistory.length > 0) {
+          console.log("  - ChatHistory preview (last 2):");
+          chatHistory.slice(-2).forEach((m, idx) => {
+            console.log(`    [${chatHistory.length - 2 + idx}] ${m.role}: ${m.content?.substring(0, 40)}...`);
+          });
+        } else {
+          console.log("  - ⚠️ No chat history - starting new conversation");
+        }
+      }
+
+      const response = await askQuestion(question, threadId || null, (message) => {
         // Keep simple loader for follow-up questions
         setLoading(true, "", true)
-      })
+      }, chatHistory)
+      
+      console.log("=== Frontend: Received Response ===");
+      if (threadId) {
+        console.log("  - ThreadId:", response.threadId);
+        console.log("  - Has history (from state):", response.hasHistory);
+        console.log("  - Total messages in conversation:", response.messageCount || "unknown");
+        console.log("  - Status:", response.status);
+      } else {
+        console.log("  - Has history (from request):", response.hasHistory);
+        console.log("  - Status:", response.status);
+      }
 
       // Update threadId if returned (should be same, but just in case)
       if (response.threadId) {

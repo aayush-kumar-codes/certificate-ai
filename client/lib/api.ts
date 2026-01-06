@@ -9,8 +9,10 @@ export interface UploadResponse {
 
 export interface AskResponse {
   answer: string
-  threadId: string
+  threadId: string | null
   status: string
+  hasHistory?: boolean // Indicates if chat history exists
+  messageCount?: number // Total messages in conversation (for threadId conversations)
   validationResult?: {
     passed: boolean
     checks: Array<{
@@ -75,23 +77,33 @@ export async function uploadPDF(
 
 export async function askQuestion(
   question: string,
-  threadId: string,
+  threadId?: string | null,
   onProgress?: (message: string) => void,
+  chatHistory?: Array<{ role: string; content: string }>,
 ): Promise<AskResponse> {
   if (onProgress) {
     onProgress("Processing your request...")
   }
 
   try {
+    const requestBody = {
+      question,
+      ...(threadId && { threadId }),
+      ...(chatHistory && chatHistory.length > 0 && { chatHistory }),
+    };
+    
+    console.log("=== API: Request Body ===");
+    console.log("Question:", question);
+    console.log("ThreadId:", threadId || "none");
+    console.log("ChatHistory in body:", requestBody.chatHistory ? `${requestBody.chatHistory.length} messages` : "not included");
+    console.log("Request body keys:", Object.keys(requestBody));
+    
     const response = await fetch(ASK_API_URL, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({
-        question,
-        threadId,
-      }),
+      body: JSON.stringify(requestBody),
     })
 
     if (!response.ok) {
