@@ -5,6 +5,9 @@ import { askQuestion } from "./askQuestion.js";
 import { embedPdfToPinecone } from "./utils/process-pdf.js";
 import { embedImageToPinecone } from "./utils/process-image.js";
 import cors from "cors";
+import { certificateEvaluationGraph } from "./graph/index.js";
+import { getState, saveState, createThreadId } from "./graph/stateStorage.js";
+import { STATUS } from "./graph/state.js";
 dotenv.config();
 
 const app = express();
@@ -25,17 +28,56 @@ app.post("/upload", upload.single("pdf"), async (req, res) => {
     const path = file.path;
     const mimetype = file.mimetype || "";
 
+    // Get or create thread ID
+    const threadId = req.body.threadId || createThreadId();
+
+    // Load existing state or create new
+    let currentState = getState(threadId);
+    if (!currentState) {
+      currentState = {
+        messages: [],
+        uploadedDocument: null,
+        criteria: null,
+        extractedFields: null,
+        validationResult: null,
+        status: STATUS.AWAITING_UPLOAD,
+        threadId: threadId
+      };
+    }
+
+    // Update state with uploaded document
+    currentState.uploadedDocument = {
+      path: path,
+      mimetype: mimetype,
+      filename: file.filename,
+      originalname: file.originalname
+    };
+
+    // Save state before running graph
+    saveState(threadId, currentState);
+
+    // Run the graph starting from upload node
+    const config = { configurable: { thread_id: threadId } };
+    const result = await certificateEvaluationGraph.invoke(currentState, config);
+
+    // Save updated state
+    saveState(threadId, result);
+
+    // Get the last assistant message
+    const lastMessage = result.messages[result.messages.length - 1];
+
+    // Also embed to Pinecone for backward compatibility (if needed)
     if (mimetype === "application/pdf") {
       await embedPdfToPinecone(path);
-      return res.json({ message: "PDF embedded successfully" });
-    }
-
-    if (mimetype.startsWith("image/")) {
+    } else if (mimetype.startsWith("image/")) {
       await embedImageToPinecone(path);
-      return res.json({ message: "Image embedded successfully" });
     }
 
-    return res.status(400).json({ error: "Unsupported file type" });
+    return res.json({
+      message: lastMessage?.content || "Document uploaded successfully",
+      threadId: threadId,
+      status: result.status
+    });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: "Failed to process file" });
@@ -43,13 +85,68 @@ app.post("/upload", upload.single("pdf"), async (req, res) => {
 });
 
 app.post("/ask", async (req, res) => {
-  const { question, chatHistory = [] } = req.body;
+  const { question, threadId } = req.body;
   try {
     if (!question) {
       return res.status(400).json({ error: "Question is required" });
     }
-    const result = await askQuestion(question, chatHistory);
-    res.json(result);
+
+    // If threadId is provided, use certificate evaluation graph
+    if (threadId) {
+      // Load existing state
+      let currentState = getState(threadId);
+      
+      if (!currentState) {
+        return res.status(404).json({ 
+          error: "Thread not found. Please upload a document first." 
+        });
+      }
+
+      // Add user message to state
+      currentState.messages = [
+        ...currentState.messages,
+        {
+          role: "user",
+          content: question
+        }
+      ];
+
+      // Save state before running graph
+      saveState(threadId, currentState);
+
+      // Run the graph from conversation node
+      // We'll use streamEvents or invoke with proper routing
+      const config = { configurable: { thread_id: threadId } };
+      
+      // Determine which node to start from based on current state
+      let result;
+      if (currentState.status === STATUS.AWAITING_UPLOAD) {
+        // Shouldn't happen if upload was done, but handle it
+        result = await certificateEvaluationGraph.invoke(currentState, config);
+      } else {
+        // Continue from conversation node
+        result = await certificateEvaluationGraph.invoke(currentState, config);
+      }
+
+      // Save updated state
+      saveState(threadId, result);
+
+      // Get the last assistant message
+      const lastMessage = result.messages[result.messages.length - 1];
+
+      return res.json({
+        answer: lastMessage?.content || "No response generated",
+        threadId: threadId,
+        status: result.status,
+        validationResult: result.validationResult,
+        extractedFields: result.extractedFields
+      });
+    } else {
+      // Fallback to original askQuestion for backward compatibility
+      const { chatHistory = [] } = req.body;
+      const result = await askQuestion(question, chatHistory);
+      res.json(result);
+    }
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: "Failed to generate answer" });

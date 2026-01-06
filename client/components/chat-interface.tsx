@@ -14,7 +14,8 @@ export function ChatInterface() {
   const showSimpleLoader = useChatStore((state: ChatStore) => state.showSimpleLoader)
   const addMessage = useChatStore((state: ChatStore) => state.addMessage)
   const setLoading = useChatStore((state: ChatStore) => state.setLoading)
-  const chatHistory = useChatStore((state: ChatStore) => state.chatHistory)
+  const threadId = useChatStore((state: ChatStore) => state.threadId)
+  const setThreadId = useChatStore((state: ChatStore) => state.setThreadId)
 
   const scrollRef = React.useRef<HTMLDivElement>(null)
   const messagesEndRef = React.useRef<HTMLDivElement>(null)
@@ -96,6 +97,14 @@ export function ChatInterface() {
   const handleSend = async () => {
     if (!input.trim() || isLoading) return
 
+    if (!threadId) {
+      addMessage({
+        role: "bot",
+        content: "Please upload a certificate document first before asking questions.",
+      })
+      return
+    }
+
     const userMessage = { role: "user" as const, content: input }
     addMessage(userMessage)
     const question = input
@@ -105,15 +114,22 @@ export function ChatInterface() {
       // Use simple loader for follow-up questions
       setLoading(true, "", true)
 
-      const response = await askQuestion(question, chatHistory(), (message) => {
+      const response = await askQuestion(question, threadId, (message) => {
         // Keep simple loader for follow-up questions
         setLoading(true, "", true)
       })
 
+      // Update threadId if returned (should be same, but just in case)
+      if (response.threadId) {
+        setThreadId(response.threadId)
+      }
+
       addMessage({
         role: "bot",
         content: response.answer,
-        reasoning: "Processing user query. Cross-referencing certificate content with evaluation requirements.",
+        reasoning: response.validationResult 
+          ? `Validation ${response.validationResult.passed ? "passed" : "failed"}. ${response.validationResult.checks.length} criteria checked.`
+          : "Processing your request.",
       })
 
       setLoading(false)
@@ -139,15 +155,13 @@ export function ChatInterface() {
     const input = document.createElement("input")
     input.type = "file"
     input.accept = ".pdf,image/*"
-    input.multiple = true
+    input.multiple = false
     input.onchange = (e) => {
       const files = (e.target as HTMLInputElement).files
-      if (files) {
-        console.log(
-          "[v0] Attaching files to chat:",
-          Array.from(files).map((f) => f.name),
-        )
-        // Future: integrate with knowledge panel
+      if (files && files.length > 0) {
+        // Redirect to knowledge panel for upload
+        // The knowledge panel handles the upload flow
+        console.log("Please use the knowledge panel to upload certificates")
       }
     }
     input.click()

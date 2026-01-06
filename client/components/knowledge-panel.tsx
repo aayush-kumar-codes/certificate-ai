@@ -9,7 +9,7 @@ import {
   useChatStore,
   type Certificate,
 } from "@/lib/store"
-import { uploadPDF, askQuestion } from "@/lib/api"
+import { uploadPDF } from "@/lib/api"
 
 export function KnowledgePanel() {
   const certificates = useCertificateStore((state) => state.certificates)
@@ -21,7 +21,7 @@ export function KnowledgePanel() {
   const removeCertificate = useCertificateStore((state) => state.removeCertificate)
   const addMessage = useChatStore((state) => state.addMessage)
   const setChatLoading = useChatStore((state) => state.setLoading)
-  const chatHistory = useChatStore((state) => state.chatHistory)
+  const setThreadId = useChatStore((state) => state.setThreadId)
 
   const [isDragging, setIsDragging] = React.useState(false)
 
@@ -45,53 +45,37 @@ export function KnowledgePanel() {
 
         try {
           // Upload file with progress updates
-          await uploadPDF(file, (message) => {
-            updateLoadingMessage(id, message)
-            if (message === `Processing ${fileType}...` || message === "Processing PDF..." || message === "Processing Image...") {
-              updateCertificate(id, { status: "Processing" })
-            } else if (message === "Embedding document to knowledge base...") {
-              updateCertificate(id, { status: "Embedding" })
-            }
-          })
-
-          // Update to evaluating status
-          updateCertificate(id, {
-            status: "Evaluating",
-            loadingMessage: "Evaluating certificate...",
-          })
-
-          // Auto-trigger evaluation
-          const evaluationPrompt =
-            "Evaluate the uploaded certificate and provide a summary of its key information, compliance status, and any important findings."
-
-          // Use mixed text loader for PDF upload evaluation
-          setChatLoading(true, "Evaluating certificate...", false)
-
-          const response = await askQuestion(
-            evaluationPrompt,
-            chatHistory(),
+          // Note: For new uploads, threadId will be created by the server
+          // For re-uploads of the same certificate, we could pass existing threadId
+          const uploadResponse = await uploadPDF(
+            file,
+            undefined, // Let server create new threadId for new uploads
             (message) => {
               updateLoadingMessage(id, message)
-              // Keep mixed text loader for PDF upload evaluation
-              setChatLoading(true, message, false)
-              if (message === "Analyzing compliance requirements...") {
-                updateCertificate(id, { status: "Analyzing" })
-              } else if (message === "Generating evaluation report...") {
-                updateCertificate(id, { status: "Generating" })
+              if (message === `Processing ${fileType}...` || message === "Processing PDF..." || message === "Processing Image...") {
+                updateCertificate(id, { status: "Processing" })
+              } else if (message === "Processing certificate...") {
+                updateCertificate(id, { status: "Processing" })
               }
-            },
+            }
           )
 
-          // Add AI response to chat
-          addMessage({
-            role: "bot",
-            content: response.answer,
-            reasoning: "Certificate evaluation completed.",
-          })
+          // Store threadId from upload response
+          const newThreadId = uploadResponse.threadId
+          updateCertificate(id, { threadId: newThreadId })
+          setThreadId(newThreadId)
 
-          // Update certificate to evaluated
+          // Add the agent's initial message to chat (asking for criteria)
+          if (uploadResponse.message) {
+            addMessage({
+              role: "bot",
+              content: uploadResponse.message,
+            })
+          }
+
+          // Update certificate status based on upload response
           updateCertificate(id, {
-            status: "Evaluated",
+            status: uploadResponse.status === "awaiting_criteria" ? "Processing" : "Evaluated",
             loadingMessage: undefined,
           })
 
