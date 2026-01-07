@@ -2,7 +2,8 @@ import { run } from "@openai/agents";
 import { RouterAgent } from "../agents/routerAgent.js";
 import { GeneralKnowledgeAgent } from "../agents/generalAgent.js";
 import { CertificateValidationAgent } from "../agents/certificateAgent.js";
-import { hasDocuments } from "../utils/process-pdf.js";   
+import { hasDocuments } from "../utils/process-pdf.js";
+import { getOrCreateSession } from "../utils/sessionManager.js";   
 function getFinalOutput(result) {
     if (!result) {
       console.log("⚠️ getFinalOutput: result is null/undefined");
@@ -127,14 +128,20 @@ function getFinalOutput(result) {
   }
   
   export async function chat(req, res) {
-    const { question } = req.body;
+    const { question, sessionId } = req.body;
   
     try {
+      // Get or create session for conversation memory
+      const { sessionId: currentSessionId, session, isNew } = getOrCreateSession(sessionId);
+      console.log("🔗 Session ID:", currentSessionId);
+      console.log(`💾 Memory Status: ${isNew ? 'NEW session - starting fresh conversation' : 'EXISTING session - conversation history preserved'}`);
+      
       // Check if documents exist first (before routing)
       const documentsExist = await hasDocuments();
       console.log("📄 Documents exist in Pinecone:", documentsExist);
       
-      const routerResult = await run(RouterAgent, question);
+      // Run router agent with session for memory
+      const routerResult = await run(RouterAgent, question, { session });
       
       // Debug: Check finalOutput (primary method per docs)
       if (routerResult?.finalOutput !== undefined) {
@@ -152,9 +159,15 @@ function getFinalOutput(result) {
       }
   
       if (decision === "GENERAL") {
-        const generalResult = await run(GeneralKnowledgeAgent, question);
+        const generalResult = await run(GeneralKnowledgeAgent, question, { session });
         const answer = getFinalOutput(generalResult);
-        return res.json({ answer });
+        console.log(`✅ Memory: Conversation stored in MemorySession (${currentSessionId.substring(0, 8)}...)`);
+        return res.json({ 
+          answer,
+          sessionId: currentSessionId,
+          memoryActive: true,
+          isNewSession: isNew
+        });
       }
   
       if (decision === "CERTIFICATE") {
@@ -162,19 +175,33 @@ function getFinalOutput(result) {
         if (!documentsExist) {
           console.log("⚠️ Certificate question detected but no documents found");
           return res.json({
-            answer: "Please upload your certificate document first so I can help you."
+            answer: "Please upload your certificate document first so I can help you.",
+            sessionId: currentSessionId,
+            memoryActive: true,
+            isNewSession: isNew
           });
         }
         
         // Documents exist, proceed with certificate validation
         console.log("✅ Documents found, processing certificate question");
-        const certResult = await run(CertificateValidationAgent, question);
+        const certResult = await run(CertificateValidationAgent, question, { session });
         const answer = getFinalOutput(certResult);
-        return res.json({ answer });
+        console.log(`✅ Memory: Conversation stored in MemorySession (${currentSessionId.substring(0, 8)}...)`);
+        return res.json({ 
+          answer,
+          sessionId: currentSessionId,
+          memoryActive: true,
+          isNewSession: isNew
+        });
       }
   
       // Fallback for unrecognized decisions
-      return res.json({ answer: "I'm not sure how to handle that request." });
+      return res.json({ 
+        answer: "I'm not sure how to handle that request.",
+        sessionId: currentSessionId,
+        memoryActive: true,
+        isNewSession: isNew
+      });
   
     } catch (err) {
       console.error("Chat Error:", err);

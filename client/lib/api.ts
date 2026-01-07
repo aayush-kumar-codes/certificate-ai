@@ -3,16 +3,18 @@ const ASK_API_URL = "http://116.202.210.102:5001/api/chat"
 
 export interface UploadResponse {
   message: string
-  threadId: string
+  sessionId: string
   status: string
 }
 
 export interface AskResponse {
   answer: string
-  threadId: string | null
+  sessionId: string | null
   status: string
+  memoryActive?: boolean // Indicates if MemorySession is active
+  isNewSession?: boolean // Indicates if this is a new session
   hasHistory?: boolean // Indicates if chat history exists
-  messageCount?: number // Total messages in conversation (for threadId conversations)
+  messageCount?: number // Total messages in conversation (for sessionId conversations)
   validationResult?: {
     passed: boolean
     checks: Array<{
@@ -31,7 +33,7 @@ export interface AskResponse {
 
 export async function uploadPDF(
   file: File,
-  threadId?: string,
+  sessionId?: string,
   onProgress?: (message: string) => void,
 ): Promise<UploadResponse> {
   const isImage = file.type.startsWith("image/")
@@ -43,8 +45,8 @@ export async function uploadPDF(
 
   const formData = new FormData()
   formData.append("pdf", file)
-  if (threadId) {
-    formData.append("threadId", threadId)
+  if (sessionId) {
+    formData.append("sessionId", sessionId)
   }
 
   if (onProgress) {
@@ -77,9 +79,8 @@ export async function uploadPDF(
 
 export async function askQuestion(
   question: string,
-  threadId?: string | null,
+  sessionId?: string | null,
   onProgress?: (message: string) => void,
-  chatHistory?: Array<{ role: string; content: string }>,
 ): Promise<AskResponse> {
   if (onProgress) {
     onProgress("Processing your request...")
@@ -88,14 +89,12 @@ export async function askQuestion(
   try {
     const requestBody = {
       question,
-      ...(threadId && { threadId }),
-      ...(chatHistory && chatHistory.length > 0 && { chatHistory }),
+      ...(sessionId && { sessionId }),
     };
     
     console.log("=== API: Request Body ===");
     console.log("Question:", question);
-    console.log("ThreadId:", threadId || "none");
-    console.log("ChatHistory in body:", requestBody.chatHistory ? `${requestBody.chatHistory.length} messages` : "not included");
+    console.log("SessionId:", sessionId || "none");
     console.log("Request body keys:", Object.keys(requestBody));
     
     const response = await fetch(ASK_API_URL, {

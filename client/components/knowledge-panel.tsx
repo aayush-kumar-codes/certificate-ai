@@ -21,7 +21,7 @@ export function KnowledgePanel() {
   const removeCertificate = useCertificateStore((state) => state.removeCertificate)
   const addMessage = useChatStore((state) => state.addMessage)
   const setChatLoading = useChatStore((state) => state.setLoading)
-  const setThreadId = useChatStore((state) => state.setThreadId)
+  const setSessionId = useChatStore((state) => state.setSessionId)
 
   const [isDragging, setIsDragging] = React.useState(false)
 
@@ -45,11 +45,11 @@ export function KnowledgePanel() {
 
         try {
           // Upload file with progress updates
-          // Note: For new uploads, threadId will be created by the server
-          // For re-uploads of the same certificate, we could pass existing threadId
+          // Note: For new uploads, sessionId will be created by the server
+          // For re-uploads of the same certificate, we could pass existing sessionId
           const uploadResponse = await uploadPDF(
             file,
-            undefined, // Let server create new threadId for new uploads
+            undefined, // Let server create new sessionId for new uploads
             (message) => {
               updateLoadingMessage(id, message)
               if (message === `Processing ${fileType}...` || message === "Processing PDF..." || message === "Processing Image...") {
@@ -60,10 +60,10 @@ export function KnowledgePanel() {
             }
           )
 
-          // Store threadId from upload response
-          const newThreadId = uploadResponse.threadId
-          updateCertificate(id, { threadId: newThreadId })
-          setThreadId(newThreadId)
+          // Store sessionId from upload response
+          const newSessionId = uploadResponse.sessionId
+          updateCertificate(id, { sessionId: newSessionId })
+          setSessionId(newSessionId)
 
           // Add the agent's initial message to chat (asking for criteria)
           if (uploadResponse.message) {

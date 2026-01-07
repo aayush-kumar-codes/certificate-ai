@@ -14,9 +14,8 @@ export function ChatInterface() {
   const showSimpleLoader = useChatStore((state: ChatStore) => state.showSimpleLoader)
   const addMessage = useChatStore((state: ChatStore) => state.addMessage)
   const setLoading = useChatStore((state: ChatStore) => state.setLoading)
-  const threadId = useChatStore((state: ChatStore) => state.threadId)
-  const setThreadId = useChatStore((state: ChatStore) => state.setThreadId)
-  const getChatHistory = useChatStore((state: ChatStore) => state.chatHistory)
+  const sessionId = useChatStore((state: ChatStore) => state.sessionId)
+  const setSessionId = useChatStore((state: ChatStore) => state.setSessionId)
   const clearMessages = useChatStore((state: ChatStore) => state.clearMessages)
 
   const scrollRef = React.useRef<HTMLDivElement>(null)
@@ -115,51 +114,27 @@ export function ChatInterface() {
       // Use simple loader for follow-up questions
       setLoading(true, "", true)
 
-      // Get chat history (only if no threadId, as threadId-based conversations use state storage)
-      const chatHistory = !threadId ? getChatHistory() : undefined;
-      
-      // Log chat history for debugging
+      // Log session info for debugging
       console.log("=== Frontend: Sending Question ===");
-      if (threadId) {
-        console.log("🔗 Using ThreadId Mode (State Storage):");
-        console.log("  - ThreadId:", threadId);
-        console.log("  - Frontend messages in store:", messages.length);
-        console.log("  - ℹ️ Chat history is stored on server (state storage)");
-        console.log("  - ℹ️ Server will load history from state storage automatically");
-      } else {
-        console.log("📝 Using Frontend Chat History Mode:");
-        console.log("  - ThreadId: none");
-        console.log("  - Messages in store:", messages.length);
-        console.log("  - ChatHistory to send:", chatHistory ? `${chatHistory.length} messages` : "undefined");
-        if (chatHistory && chatHistory.length > 0) {
-          console.log("  - ChatHistory preview (last 2):");
-          chatHistory.slice(-2).forEach((m, idx) => {
-            console.log(`    [${chatHistory.length - 2 + idx}] ${m.role}: ${m.content?.substring(0, 40)}...`);
-          });
-        } else {
-          console.log("  - ⚠️ No chat history - starting new conversation");
-        }
-      }
+      console.log("🔗 Using Session Mode (MemorySession):");
+      console.log("  - SessionId:", sessionId || "none (will be created)");
+      console.log("  - Frontend messages in store:", messages.length);
+      console.log("  - ℹ️ Chat history is stored in MemorySession on server");
 
-      const response = await askQuestion(question, threadId || null, (message) => {
+      const response = await askQuestion(question, sessionId || null, (message) => {
         // Keep simple loader for follow-up questions
         setLoading(true, "", true)
-      }, chatHistory)
+      })
       
       console.log("=== Frontend: Received Response ===");
-      if (threadId) {
-        console.log("  - ThreadId:", response.threadId);
-        console.log("  - Has history (from state):", response.hasHistory);
-        console.log("  - Total messages in conversation:", response.messageCount || "unknown");
-        console.log("  - Status:", response.status);
-      } else {
-        console.log("  - Has history (from request):", response.hasHistory);
-        console.log("  - Status:", response.status);
-      }
+      console.log("  - SessionId:", response.sessionId);
+      console.log("  - Status:", response.status);
+      console.log("  - Memory Active:", response.memoryActive ? "✅ YES" : "❌ NO");
+      console.log("  - Is New Session:", response.isNewSession ? "🆕 YES" : "📚 NO (using existing memory)");
 
-      // Update threadId if returned (should be same, but just in case)
-      if (response.threadId) {
-        setThreadId(response.threadId)
+      // Update sessionId if returned (should be same, but just in case)
+      if (response.sessionId) {
+        setSessionId(response.sessionId)
       }
 
       addMessage({

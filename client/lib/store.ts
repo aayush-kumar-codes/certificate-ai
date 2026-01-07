@@ -18,7 +18,7 @@ export interface Certificate {
   loadingMessage?: string
   uploadError?: string
   evaluationError?: string
-  threadId?: string
+  sessionId?: string
 }
 
 export interface ChatMessage {
@@ -40,11 +40,11 @@ export interface ChatStore {
   isLoading: boolean
   loadingMessage: string
   showSimpleLoader: boolean
-  threadId: string | null
+  sessionId: string | null
   addMessage: (message: ChatMessage) => void
   setLoading: (isLoading: boolean, message?: string, showSimpleLoader?: boolean) => void
   clearMessages: () => void
-  setThreadId: (threadId: string | null) => void
+  setSessionId: (sessionId: string | null) => void
   chatHistory: () => Array<{ role: string; content: string }>
 }
 
@@ -77,15 +77,15 @@ export const useChatStore = create<ChatStore>((set, get) => ({
   isLoading: false,
   loadingMessage: "",
   showSimpleLoader: false,
-  threadId: null,
+  sessionId: null,
   addMessage: (message) =>
     set((state) => ({
       messages: [...state.messages, message],
     })),
   setLoading: (isLoading, message = "", showSimpleLoader = false) =>
     set({ isLoading, loadingMessage: message, showSimpleLoader }),
-  clearMessages: () => set({ messages: [], threadId: null }),
-  setThreadId: (threadId) => set({ threadId }),
+  clearMessages: () => set({ messages: [], sessionId: null }),
+  setSessionId: (sessionId) => set({ sessionId }),
   chatHistory: () =>
     get().messages.map((msg) => ({
       role: msg.role,

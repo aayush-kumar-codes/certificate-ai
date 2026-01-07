@@ -1,5 +1,6 @@
 import { embedPdfToPinecone } from "../utils/process-pdf.js";
 import { embedImageToPinecone } from "../utils/process-image.js";
+import { getOrCreateSession } from "../utils/sessionManager.js";
 
 export async function uploadPdf(req, res) {
   try {
@@ -9,17 +10,23 @@ export async function uploadPdf(req, res) {
 
     const filePath = req.file.path;
     const mimetype = req.file.mimetype || "";
+    
+    // Get or create sessionId (optional - for linking uploads to chat sessions)
+    const sessionId = req.body.sessionId;
+    const { sessionId: currentSessionId } = getOrCreateSession(sessionId);
 
     // Parse and store in Pinecone DB based on file type
     if (mimetype === "application/pdf") {
       await embedPdfToPinecone(filePath);
       return res.json({
-        message: "PDF uploaded and processed successfully"
+        message: "PDF uploaded and processed successfully",
+        sessionId: currentSessionId
       });
     } else if (mimetype.startsWith("image/")) {
       await embedImageToPinecone(filePath);
       return res.json({
-        message: "Image uploaded and processed successfully"
+        message: "Image uploaded and processed successfully",
+        sessionId: currentSessionId
       });
     } else {
       return res.status(400).json({ 
