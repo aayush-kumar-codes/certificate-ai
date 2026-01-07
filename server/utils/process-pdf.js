@@ -54,4 +54,15 @@ async function embedPdfToPinecone(pdfPath) {
   console.log("✅ PDF content embedded into Pinecone.");
 }
 
-export { embedPdfToPinecone };
+async function hasDocuments() {
+  try {
+    const index = pinecone.Index(process.env.PINECONE_INDEX);
+    const stats = await index.describeIndexStats();
+    return (stats.totalVectorCount || 0) > 0;
+  } catch (error) {
+    console.error("Error checking Pinecone documents:", error);
+    return false;
+  }
+}
+
+export { embedPdfToPinecone, hasDocuments };

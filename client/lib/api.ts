@@ -1,5 +1,5 @@
-const UPLOAD_API_URL = "http://116.202.210.102:5001/upload"
-const ASK_API_URL = "http://116.202.210.102:5001/ask"
+const UPLOAD_API_URL = "http://116.202.210.102:5001/api/upload"
+const ASK_API_URL = "http://116.202.210.102:5001/api/chat"
 
 export interface UploadResponse {
   message: string

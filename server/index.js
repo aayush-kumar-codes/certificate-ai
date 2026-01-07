@@ -8,6 +8,7 @@ import cors from "cors";
 import { certificateEvaluationGraph } from "./graph/index.js";
 import { getState, saveState, createThreadId } from "./graph/stateStorage.js";
 import { STATUS } from "./graph/state.js";
+import routes from "./routes/routes.js";
 dotenv.config();
 
 const app = express();
@@ -17,6 +18,7 @@ app.use(cors( {
   methods: ["GET", "POST", "PUT", "DELETE"],
   allowedHeaders: ["Content-Type", "Authorization"],
 }));
+app.use("/api", routes);
 app.post("/upload", upload.single("pdf"), async (req, res) => {
   try {
     const file = req.file;
