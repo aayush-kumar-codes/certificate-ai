@@ -1,5 +1,7 @@
+import { tool } from "@openai/agents";
 import { searchDocuments } from "./searchDocs.js";
-export const searchDocumentTool = {
+
+export const searchDocumentTool = tool({
   name: "search_document",
   description: "Search in uploaded certificate documents",
   parameters: {
@@ -7,10 +9,11 @@ export const searchDocumentTool = {
     properties: {
       query: { type: "string" }
     },
-    required: ["query"]
+    required: ["query"],
+    additionalProperties: false
   },
-  handler: async ({ query }) => {
+  execute: async ({ query }) => {
     const result = await searchDocuments(query);
     return result || "No relevant data found in document.";
   }
-};
+});

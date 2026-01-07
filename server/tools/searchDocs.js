@@ -7,7 +7,7 @@ const embeddings = new OpenAIEmbeddings({
 });
 
 export async function searchDocuments(query) {
-  const index = pinecone.index(process.env.PINECONE_INDEX);
+  const index = pinecone.Index(process.env.PINECONE_INDEX);
 
   const queryEmbedding = await embeddings.embedQuery(query);
 

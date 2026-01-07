@@ -12,7 +12,7 @@ const embeddings = new OpenAIEmbeddings({
 });
 
 async function askQuestion(query) {
-  const index = pinecone.index(process.env.PINECONE_INDEX);
+  const index = pinecone.Index(process.env.PINECONE_INDEX);
 
   const queryEmbedding = await embeddings.embedQuery(query);
 

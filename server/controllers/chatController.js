@@ -130,6 +130,10 @@ function getFinalOutput(result) {
     const { question } = req.body;
   
     try {
+      // Check if documents exist first (before routing)
+      const documentsExist = await hasDocuments();
+      console.log("📄 Documents exist in Pinecone:", documentsExist);
+      
       const routerResult = await run(RouterAgent, question);
       
       // Debug: Check finalOutput (primary method per docs)
@@ -154,22 +158,22 @@ function getFinalOutput(result) {
       }
   
       if (decision === "CERTIFICATE") {
-        if (!(await hasDocuments())) {
+        // Check if documents exist - if not, prompt user to upload
+        if (!documentsExist) {
+          console.log("⚠️ Certificate question detected but no documents found");
           return res.json({
-            answer: "Please upload your certificate document first so I can validate it."
+            answer: "Please upload your certificate document first so I can help you."
           });
         }
+        
+        // Documents exist, proceed with certificate validation
+        console.log("✅ Documents found, processing certificate question");
         const certResult = await run(CertificateValidationAgent, question);
         const answer = getFinalOutput(certResult);
         return res.json({ answer });
       }
   
-      if (decision === "UPLOAD_REQUIRED") {
-        return res.json({
-          answer: "Please upload your certificate document first so I can help you."
-        });
-      }
-  
+      // Fallback for unrecognized decisions
       return res.json({ answer: "I'm not sure how to handle that request." });
   
     } catch (err) {
