@@ -43,10 +43,13 @@ export interface ChatStore {
   loadingMessage: string
   showSimpleLoader: boolean
   sessionId: string | null
+  feedbackSubmitted: boolean
+  feedbackType: "LIKE" | "DISLIKE" | null
   addMessage: (message: ChatMessage) => void
   setLoading: (isLoading: boolean, message?: string, showSimpleLoader?: boolean) => void
   clearMessages: () => void
   setSessionId: (sessionId: string | null) => void
+  setFeedback: (feedbackType: "LIKE" | "DISLIKE" | null) => void
   chatHistory: () => Array<{ role: string; content: string }>
 }
 
@@ -80,14 +83,21 @@ export const useChatStore = create<ChatStore>((set, get) => ({
   loadingMessage: "",
   showSimpleLoader: false,
   sessionId: null,
+  feedbackSubmitted: false,
+  feedbackType: null,
   addMessage: (message) =>
     set((state) => ({
       messages: [...state.messages, message],
     })),
   setLoading: (isLoading, message = "", showSimpleLoader = false) =>
     set({ isLoading, loadingMessage: message, showSimpleLoader }),
-  clearMessages: () => set({ messages: [], sessionId: null }),
+  clearMessages: () => set({ messages: [], sessionId: null, feedbackSubmitted: false, feedbackType: null }),
   setSessionId: (sessionId) => set({ sessionId }),
+  setFeedback: (feedbackType) =>
+    set({
+      feedbackType,
+      feedbackSubmitted: feedbackType !== null,
+    }),
   chatHistory: () =>
     get().messages.map((msg) => ({
       role: msg.role,

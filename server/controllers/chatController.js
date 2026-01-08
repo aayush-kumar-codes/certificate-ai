@@ -181,8 +181,9 @@ function getFinalOutput(result) {
         console.log(`✅ Memory: Conversation stored in MemorySession (${currentSessionId.substring(0, 8)}...)`);
         
         // Save bot response to database
+        let messageId = null;
         try {
-          await saveConversationMessage({
+          const savedMessage = await saveConversationMessage({
             sessionId: currentSessionId,
             role: "ASSISTANT",
             content: answer,
@@ -193,6 +194,7 @@ function getFinalOutput(result) {
               memoryActive: true,
             },
           });
+          messageId = savedMessage.id;
         } catch (logError) {
           console.error("⚠️ Failed to log bot response:", logError);
           // Continue execution even if logging fails
@@ -202,7 +204,8 @@ function getFinalOutput(result) {
           answer,
           sessionId: currentSessionId,
           memoryActive: true,
-          isNewSession: isNew
+          isNewSession: isNew,
+          ...(messageId && { messageId })
         });
       }
   
@@ -227,8 +230,9 @@ function getFinalOutput(result) {
             const uploadWaitAnswer = "I'm waiting for your document upload. Please upload your certificate document first, then let me know when you're done.";
             
             // Save bot response to database
+            let messageId = null;
             try {
-              await saveConversationMessage({
+              const savedMessage = await saveConversationMessage({
                 sessionId: currentSessionId,
                 role: "ASSISTANT",
                 content: uploadWaitAnswer,
@@ -240,6 +244,7 @@ function getFinalOutput(result) {
                   waitingForUpload: true,
                 },
               });
+              messageId = savedMessage.id;
             } catch (logError) {
               console.error("⚠️ Failed to log bot response:", logError);
             }
@@ -249,7 +254,8 @@ function getFinalOutput(result) {
               sessionId: currentSessionId,
               memoryActive: true,
               isNewSession: isNew,
-              waitingForUpload: true
+              waitingForUpload: true,
+              ...(messageId && { messageId })
             });
           }
         }
@@ -260,8 +266,9 @@ function getFinalOutput(result) {
           const uploadPromptAnswer = "Please upload your certificate document first so I can help you.";
           
           // Save bot response to database
+          let messageId = null;
           try {
-            await saveConversationMessage({
+            const savedMessage = await saveConversationMessage({
               sessionId: currentSessionId,
               role: "ASSISTANT",
               content: uploadPromptAnswer,
@@ -272,6 +279,7 @@ function getFinalOutput(result) {
                 memoryActive: true,
               },
             });
+            messageId = savedMessage.id;
           } catch (logError) {
             console.error("⚠️ Failed to log bot response:", logError);
           }
@@ -280,7 +288,8 @@ function getFinalOutput(result) {
             answer: uploadPromptAnswer,
             sessionId: currentSessionId,
             memoryActive: true,
-            isNewSession: isNew
+            isNewSession: isNew,
+            ...(messageId && { messageId })
           });
         }
         
@@ -293,8 +302,9 @@ function getFinalOutput(result) {
         console.log(`✅ Memory: Conversation stored in MemorySession (${currentSessionId.substring(0, 8)}...)`);
         
         // Save bot response to database
+        let messageId = null;
         try {
-          await saveConversationMessage({
+          const savedMessage = await saveConversationMessage({
             sessionId: currentSessionId,
             role: "ASSISTANT",
             content: answer,
@@ -306,6 +316,7 @@ function getFinalOutput(result) {
               documentsExist,
             },
           });
+          messageId = savedMessage.id;
         } catch (logError) {
           console.error("⚠️ Failed to log bot response:", logError);
           // Continue execution even if logging fails
@@ -315,7 +326,8 @@ function getFinalOutput(result) {
           answer,
           sessionId: currentSessionId,
           memoryActive: true,
-          isNewSession: isNew
+          isNewSession: isNew,
+          ...(messageId && { messageId })
         });
       }
   
@@ -323,8 +335,9 @@ function getFinalOutput(result) {
       const fallbackAnswer = "I'm not sure how to handle that request.";
       
       // Save bot response to database
+      let messageId = null;
       try {
-        await saveConversationMessage({
+        const savedMessage = await saveConversationMessage({
           sessionId: currentSessionId,
           role: "ASSISTANT",
           content: fallbackAnswer,
@@ -334,6 +347,7 @@ function getFinalOutput(result) {
             memoryActive: true,
           },
         });
+        messageId = savedMessage.id;
       } catch (logError) {
         console.error("⚠️ Failed to log bot response:", logError);
       }
@@ -342,7 +356,8 @@ function getFinalOutput(result) {
         answer: fallbackAnswer,
         sessionId: currentSessionId,
         memoryActive: true,
-        isNewSession: isNew
+        isNewSession: isNew,
+        ...(messageId && { messageId })
       });
   
     } catch (err) {

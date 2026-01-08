@@ -1,5 +1,6 @@
 const UPLOAD_API_URL = "http://116.202.210.102:5001/api/upload"
 const ASK_API_URL = "http://116.202.210.102:5001/api/chat"
+const FEEDBACK_API_URL = "http://116.202.210.102:5001/api/feedback"
 
 export interface UploadResponse {
   message: string
@@ -45,6 +46,17 @@ export interface AskResponse {
     agencyName?: string | null
     expiryDate?: string | null
   }
+}
+
+export interface FeedbackResponse {
+  success: boolean
+  feedback?: {
+    id: number
+    feedbackType: "LIKE" | "DISLIKE"
+    sessionId: string
+    createdAt: string
+  }
+  error?: string
 }
 
 export async function uploadPDF(
@@ -148,6 +160,36 @@ export async function askQuestion(
   } catch (error) {
     throw new Error(
       error instanceof Error ? error.message : "Failed to process request",
+    )
+  }
+}
+
+export async function submitFeedback(
+  sessionId: string,
+  feedbackType: "LIKE" | "DISLIKE",
+): Promise<FeedbackResponse> {
+  try {
+    const response = await fetch(FEEDBACK_API_URL, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        sessionId,
+        feedbackType,
+      }),
+    })
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({ error: "Feedback submission failed" }))
+      throw new Error(errorData.error || "Feedback submission failed")
+    }
+
+    const data: FeedbackResponse = await response.json()
+    return data
+  } catch (error) {
+    throw new Error(
+      error instanceof Error ? error.message : "Failed to submit feedback",
     )
   }
 }

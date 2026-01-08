@@ -1,10 +1,11 @@
 "use client"
 
 import * as React from "react"
-import { Send, User, Bot, Paperclip, Loader2 } from "lucide-react"
+import { Send, User, Bot, Paperclip, Loader2, ThumbsUp, ThumbsDown } from "lucide-react"
 import { ScrollArea } from "@/components/ui/scroll-area"
+import { Button } from "@/components/ui/button"
 import { useChatStore, type ChatMessage, type ChatStore } from "@/lib/store"
-import { askQuestion } from "@/lib/api"
+import { askQuestion, submitFeedback } from "@/lib/api"
 
 export function ChatInterface() {
   const [input, setInput] = React.useState("")
@@ -17,6 +18,9 @@ export function ChatInterface() {
   const sessionId = useChatStore((state: ChatStore) => state.sessionId)
   const setSessionId = useChatStore((state: ChatStore) => state.setSessionId)
   const clearMessages = useChatStore((state: ChatStore) => state.clearMessages)
+  const feedbackSubmitted = useChatStore((state: ChatStore) => state.feedbackSubmitted)
+  const feedbackType = useChatStore((state: ChatStore) => state.feedbackType)
+  const setFeedback = useChatStore((state: ChatStore) => state.setFeedback)
 
   const scrollRef = React.useRef<HTMLDivElement>(null)
   const messagesEndRef = React.useRef<HTMLDivElement>(null)
@@ -145,6 +149,8 @@ export function ChatInterface() {
           : "Processing your request.",
       })
 
+      // Reset feedback state for new conversation turn
+      setFeedback(null)
       setLoading(false)
     } catch (error) {
       const errorMessage =
@@ -180,34 +186,82 @@ export function ChatInterface() {
     input.click()
   }
 
+  const handleFeedback = async (type: "LIKE" | "DISLIKE") => {
+    if (!sessionId || feedbackSubmitted) return
+
+    try {
+      await submitFeedback(sessionId, type)
+      setFeedback(type)
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : "Failed to submit feedback"
+      console.error("Feedback submission error:", errorMessage)
+      // Optionally show error toast/notification to user
+    }
+  }
+
   return (
     <div className="flex-1 flex flex-col h-full bg-background relative overflow-hidden">
       <div ref={scrollRef} className="flex-1 overflow-hidden">
         <ScrollArea className="h-full px-6 pt-20">
         <div className="max-w-2xl mx-auto space-y-8 pb-40">
-          {messages.map((msg: ChatMessage, i: number) => (
-            <div key={i} className={`flex gap-4 ${msg.role === "user" ? "justify-end" : ""}`}>
-              {msg.role === "bot" && (
-                <div className="size-8 rounded-full bg-primary flex items-center justify-center text-primary-foreground shrink-0">
-                  <Bot className="size-4" />
+          {messages.map((msg: ChatMessage, i: number) => {
+            const isLastBotMessage = msg.role === "bot" && i === messages.length - 1 && !isLoading
+            return (
+              <div key={i} className={`flex gap-4 ${msg.role === "user" ? "justify-end" : ""}`}>
+                {msg.role === "bot" && (
+                  <div className="size-8 rounded-full bg-primary flex items-center justify-center text-primary-foreground shrink-0">
+                    <Bot className="size-4" />
+                  </div>
+                )}
+                <div className={`flex flex-col gap-2 max-w-[85%] ${msg.role === "user" ? "items-end" : ""}`}>
+                  <div
+                    className={`rounded-2xl px-4 py-3 text-sm leading-relaxed whitespace-pre-line ${
+                      msg.role === "user" ? "bg-primary text-primary-foreground" : "bg-card border border-border"
+                    }`}
+                  >
+                    {msg.content}
+                  </div>
+                  {isLastBotMessage && (
+                    <div className="flex items-center gap-2 mt-1">
+                      <Button
+                        variant={feedbackType === "LIKE" ? "default" : "ghost"}
+                        size="sm"
+                        onClick={() => handleFeedback("LIKE")}
+                        disabled={feedbackSubmitted}
+                        className={`h-8 px-3 text-xs ${
+                          feedbackType === "LIKE"
+                            ? "bg-green-500 hover:bg-green-600 text-white"
+                            : "hover:bg-green-50 dark:hover:bg-green-950"
+                        }`}
+                      >
+                        <ThumbsUp className="size-3 mr-1" />
+                        Like
+                      </Button>
+                      <Button
+                        variant={feedbackType === "DISLIKE" ? "default" : "ghost"}
+                        size="sm"
+                        onClick={() => handleFeedback("DISLIKE")}
+                        disabled={feedbackSubmitted}
+                        className={`h-8 px-3 text-xs ${
+                          feedbackType === "DISLIKE"
+                            ? "bg-red-500 hover:bg-red-600 text-white"
+                            : "hover:bg-red-50 dark:hover:bg-red-950"
+                        }`}
+                      >
+                        <ThumbsDown className="size-3 mr-1" />
+                        Dislike
+                      </Button>
+                    </div>
+                  )}
                 </div>
-              )}
-              <div className={`flex flex-col gap-2 max-w-[85%] ${msg.role === "user" ? "items-end" : ""}`}>
-                <div
-                  className={`rounded-2xl px-4 py-3 text-sm leading-relaxed whitespace-pre-line ${
-                    msg.role === "user" ? "bg-primary text-primary-foreground" : "bg-card border border-border"
-                  }`}
-                >
-                  {msg.content}
-                </div>
+                {msg.role === "user" && (
+                  <div className="size-8 rounded-full bg-muted flex items-center justify-center text-muted-foreground shrink-0 border border-border">
+                    <User className="size-4" />
+                  </div>
+                )}
               </div>
-              {msg.role === "user" && (
-                <div className="size-8 rounded-full bg-muted flex items-center justify-center text-muted-foreground shrink-0 border border-border">
-                  <User className="size-4" />
-                </div>
-              )}
-            </div>
-          ))}
+            )
+          })}
           {isLoading && (
             <div className="flex gap-4">
               <div className="size-8 rounded-full bg-primary flex items-center justify-center text-primary-foreground shrink-0">

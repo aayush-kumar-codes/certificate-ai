@@ -28,6 +28,7 @@ model Conversation {
   messageCount Int       @default(0)
   lastMessage  String?
   messages     Message[]
+  feedback     Feedback?
 
   @@index([sessionId])
   @@map("conversations")
@@ -54,4 +55,21 @@ model Message {
 enum MessageRole {
   USER
   ASSISTANT
+}
+
+enum FeedbackType {
+  LIKE
+  DISLIKE
+}
+
+model Feedback {
+  id             Int          @id @default(autoincrement())
+  conversationId Int          @unique
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  sessionId      String
+  feedbackType   FeedbackType
+  createdAt      DateTime     @default(now())
+
+  @@index([sessionId])
+  @@map("feedbacks")
 }
