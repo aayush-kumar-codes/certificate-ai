@@ -30,6 +30,7 @@ export interface AskResponse {
   isNewSession?: boolean // Indicates if this is a new session
   hasHistory?: boolean // Indicates if chat history exists
   messageCount?: number // Total messages in conversation (for sessionId conversations)
+  waitingForUpload?: boolean // Optional: indicates agent is waiting for upload
   validationResult?: {
     passed: boolean
     checks: Array<{

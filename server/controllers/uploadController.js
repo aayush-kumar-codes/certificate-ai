@@ -227,9 +227,22 @@ export async function uploadPdf(req, res) {
     // Create agent with session-specific tool (includes sessionId filtering)
     const agent = createCertificateValidationAgent(currentSessionId);
     
-    // Invoke agent with document count
+    // Check if this is a subsequent upload (not the first)
+    // Get document count before this upload to determine if it's subsequent
+    const existingCountBeforeUpload = documentCount - uploadedDocuments.length;
+    const isSubsequentUpload = existingCountBeforeUpload > 0;
+    
+    // Invoke agent with different prompts based on upload type
     const documentCountText = documentCount === 1 ? "1 certificate document" : `${documentCount} certificate documents`;
-    const prompt = `A user just uploaded ${documentCountText}. Ask them how they want to validate their certificate(s) based on which criteria.`;
+    let prompt;
+    
+    if (isSubsequentUpload) {
+      // Subsequent upload - acknowledge and ask about validation criteria
+      prompt = `A user just uploaded an additional certificate document. You now have ${documentCountText} total in this session. Acknowledge the new upload and ask if they want to validate this new certificate using the same criteria as before, or if they want to use different criteria.`;
+    } else {
+      // First upload
+      prompt = `A user just uploaded ${documentCountText}. Ask them how they want to validate their certificate(s) based on which criteria.`;
+    }
     
     const agentResult = await run(agent, prompt, { session });
     const agentMessage = getFinalOutput(agentResult);

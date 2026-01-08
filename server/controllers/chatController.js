@@ -2,7 +2,7 @@ import { run } from "@openai/agents";
 import { RouterAgent } from "../agents/routerAgent.js";
 import { GeneralKnowledgeAgent } from "../agents/generalAgent.js";
 import { createCertificateValidationAgent } from "../agents/certificateAgent.js";
-import { hasDocuments } from "../utils/process-pdf.js";
+import { hasDocumentsForSession } from "../utils/documentQuery.js";
 import { getOrCreateSession } from "../utils/sessionManager.js";   
 function getFinalOutput(result) {
     if (!result) {
@@ -136,9 +136,9 @@ function getFinalOutput(result) {
       console.log("🔗 Session ID:", currentSessionId);
       console.log(`💾 Memory Status: ${isNew ? 'NEW session - starting fresh conversation' : 'EXISTING session - conversation history preserved'}`);
       
-      // Check if documents exist first (before routing)
-      const documentsExist = await hasDocuments();
-      console.log("📄 Documents exist in Pinecone:", documentsExist);
+      // Check if documents exist for this session (before routing)
+      const documentsExist = await hasDocumentsForSession(currentSessionId);
+      console.log("📄 Documents exist in Pinecone for session:", documentsExist);
       
       // Run router agent with session for memory
       const routerResult = await run(RouterAgent, question, { session });
@@ -171,8 +171,35 @@ function getFinalOutput(result) {
       }
   
       if (decision === "CERTIFICATE") {
-        // Check if documents exist - if not, prompt user to upload
-        if (!documentsExist) {
+        // Handle upload-related queries even if no documents exist yet
+        const lowerQuestion = question.toLowerCase().trim();
+        const isUploadRelated = 
+          lowerQuestion.includes("upload") || 
+          lowerQuestion.includes("done") || 
+          lowerQuestion.includes("it's done") ||
+          lowerQuestion.includes("finished");
+        
+        // If user is confirming upload completion, check if documents exist
+        if (isUploadRelated && !documentsExist) {
+          // User might be confirming upload, but documents not indexed yet
+          // Wait a moment and check again
+          await new Promise(resolve => setTimeout(resolve, 2000));
+          const documentsExistAfterWait = await hasDocumentsForSession(currentSessionId);
+          
+          if (!documentsExistAfterWait) {
+            console.log("⚠️ Upload confirmation detected but documents not found after wait");
+            return res.json({
+              answer: "I'm waiting for your document upload. Please upload your certificate document first, then let me know when you're done.",
+              sessionId: currentSessionId,
+              memoryActive: true,
+              isNewSession: isNew,
+              waitingForUpload: true
+            });
+          }
+        }
+        
+        // If no documents exist and not upload-related, prompt to upload
+        if (!documentsExist && !isUploadRelated) {
           console.log("⚠️ Certificate question detected but no documents found");
           return res.json({
             answer: "Please upload your certificate document first so I can help you.",
@@ -182,10 +209,10 @@ function getFinalOutput(result) {
           });
         }
         
-        // Documents exist, proceed with certificate validation
+        // Documents exist or upload-related query, proceed with certificate validation
         // Create agent with session-specific tool (includes sessionId filtering)
         const agent = createCertificateValidationAgent(currentSessionId);
-        console.log("✅ Documents found, processing certificate question");
+        console.log("✅ Processing certificate question with memory");
         const certResult = await run(agent, question, { session });
         const answer = getFinalOutput(certResult);
         console.log(`✅ Memory: Conversation stored in MemorySession (${currentSessionId.substring(0, 8)}...)`);
