@@ -1,7 +1,7 @@
 import { run } from "@openai/agents";
 import { RouterAgent } from "../agents/routerAgent.js";
 import { GeneralKnowledgeAgent } from "../agents/generalAgent.js";
-import { CertificateValidationAgent } from "../agents/certificateAgent.js";
+import { createCertificateValidationAgent } from "../agents/certificateAgent.js";
 import { hasDocuments } from "../utils/process-pdf.js";
 import { getOrCreateSession } from "../utils/sessionManager.js";   
 function getFinalOutput(result) {
@@ -183,8 +183,10 @@ function getFinalOutput(result) {
         }
         
         // Documents exist, proceed with certificate validation
+        // Create agent with session-specific tool (includes sessionId filtering)
+        const agent = createCertificateValidationAgent(currentSessionId);
         console.log("✅ Documents found, processing certificate question");
-        const certResult = await run(CertificateValidationAgent, question, { session });
+        const certResult = await run(agent, question, { session });
         const answer = getFinalOutput(certResult);
         console.log(`✅ Memory: Conversation stored in MemorySession (${currentSessionId.substring(0, 8)}...)`);
         return res.json({ 

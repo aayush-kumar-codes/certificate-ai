@@ -9,7 +9,7 @@ import {
   useChatStore,
   type Certificate,
 } from "@/lib/store"
-import { uploadPDF } from "@/lib/api"
+import { uploadPDF, uploadPDFs } from "@/lib/api"
 
 export function KnowledgePanel() {
   const certificates = useCertificateStore((state) => state.certificates)
@@ -24,80 +24,130 @@ export function KnowledgePanel() {
   const setSessionId = useChatStore((state) => state.setSessionId)
 
   const [isDragging, setIsDragging] = React.useState(false)
+  const sessionId = useChatStore((state) => state.sessionId)
 
   const processFiles = async (files: FileList) => {
-    for (const file of Array.from(files)) {
+    const fileArray = Array.from(files).filter(file => {
       const isPDF = file.type === "application/pdf"
       const isImage = file.type.startsWith("image/")
-      
-      if (isPDF || isImage) {
-        const fileType = isPDF ? "PDF" : "Image"
-        const id = `cert-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`
-        const cert: Certificate = {
-          id,
-          name: file.name,
-          status: "Uploading",
-          score: 0,
-          loadingMessage: `Uploading ${fileType}...`,
-        }
+      return isPDF || isImage
+    })
 
-        addCertificate(cert)
+    if (fileArray.length === 0) {
+      return
+    }
 
-        try {
-          // Upload file with progress updates
-          // Note: For new uploads, sessionId will be created by the server
-          // For re-uploads of the same certificate, we could pass existing sessionId
-          const uploadResponse = await uploadPDF(
-            file,
-            undefined, // Let server create new sessionId for new uploads
-            (message) => {
-              updateLoadingMessage(id, message)
-              if (message === `Processing ${fileType}...` || message === "Processing PDF..." || message === "Processing Image...") {
-                updateCertificate(id, { status: "Processing" })
-              } else if (message === "Processing certificate...") {
-                updateCertificate(id, { status: "Processing" })
-              }
+    // Create certificate entries for all files upfront
+    const certificateMap = new Map<string, Certificate>()
+    fileArray.forEach((file, index) => {
+      const isPDF = file.type === "application/pdf"
+      const fileType = isPDF ? "PDF" : "Image"
+      const id = `cert-${Date.now()}-${index}-${Math.random().toString(36).slice(2, 9)}`
+      const cert: Certificate = {
+        id,
+        name: file.name,
+        status: "Uploading",
+        score: 0,
+        loadingMessage: `Uploading ${fileType} (${index + 1}/${fileArray.length})...`,
+      }
+      certificateMap.set(file.name, cert)
+      addCertificate(cert)
+    })
+
+    try {
+      setChatLoading(true)
+
+      // Upload all files in batch
+      const uploadResponse = await uploadPDFs(
+        fileArray,
+        sessionId || undefined, // Use existing sessionId if available
+        (message) => {
+          // Update all certificates with progress message
+          certificateMap.forEach((cert) => {
+            updateLoadingMessage(cert.id, message)
+            if (message.includes("Processing")) {
+              updateCertificate(cert.id, { status: "Processing" })
             }
-          )
+          })
+        }
+      )
 
-          // Store sessionId from upload response
-          const newSessionId = uploadResponse.sessionId
-          updateCertificate(id, { sessionId: newSessionId })
-          setSessionId(newSessionId)
+      // Store sessionId from upload response
+      const newSessionId = uploadResponse.sessionId
+      setSessionId(newSessionId)
 
-          // Add the agent's initial message to chat (asking for criteria)
-          if (uploadResponse.message) {
-            addMessage({
-              role: "bot",
-              content: uploadResponse.message,
+      // Update certificates with document info from response
+      if (uploadResponse.documents) {
+        uploadResponse.documents.forEach((doc, index) => {
+          // Find certificate by matching file name or index
+          const cert = Array.from(certificateMap.values())[index]
+          if (cert) {
+            updateCertificate(cert.id, {
+              sessionId: newSessionId,
+              documentId: doc.documentId,
+              documentIndex: doc.documentIndex,
+              status: "Evaluated",
+              loadingMessage: undefined,
             })
           }
-
-          // Update certificate status based on upload response
-          // After successful upload, set to "Evaluated" to hide loader and show X icon
-          updateCertificate(id, {
+        })
+      } else {
+        // Fallback: mark all as evaluated
+        certificateMap.forEach((cert) => {
+          updateCertificate(cert.id, {
+            sessionId: newSessionId,
             status: "Evaluated",
             loadingMessage: undefined,
           })
+        })
+      }
 
-          setChatLoading(false)
-        } catch (error) {
-          const errorMessage =
-            error instanceof Error ? error.message : "Upload failed"
-          updateCertificate(id, {
-            status: "Error",
-            loadingMessage: undefined,
-            uploadError: errorMessage,
-          })
-          setChatLoading(false)
+      // Add the agent's initial message to chat (asking for criteria)
+      if (uploadResponse.message) {
+        addMessage({
+          role: "bot",
+          content: uploadResponse.message,
+        })
+      }
 
-          // Add error message to chat
+      // Handle errors if any
+      if (uploadResponse.errors && uploadResponse.errors.length > 0) {
+        uploadResponse.errors.forEach((error) => {
+          const cert = Array.from(certificateMap.values()).find(c => c.name === error.fileName)
+          if (cert) {
+            updateCertificate(cert.id, {
+              status: "Error",
+              loadingMessage: undefined,
+              uploadError: error.error,
+            })
+          }
           addMessage({
             role: "bot",
-            content: `Failed to process ${file.name}: ${errorMessage}`,
+            content: `Failed to process ${error.fileName}: ${error.error}`,
           })
-        }
+        })
       }
+
+      setChatLoading(false)
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : "Upload failed"
+      
+      // Mark all certificates as error
+      certificateMap.forEach((cert) => {
+        updateCertificate(cert.id, {
+          status: "Error",
+          loadingMessage: undefined,
+          uploadError: errorMessage,
+        })
+      })
+
+      setChatLoading(false)
+
+      // Add error message to chat
+      addMessage({
+        role: "bot",
+        content: `Failed to process files: ${errorMessage}`,
+      })
     }
   }
 
@@ -140,7 +190,7 @@ export function KnowledgePanel() {
             <div className="flex items-center justify-between mb-4">
               <div className="flex items-center gap-2 text-xs font-medium uppercase tracking-widest text-muted-foreground">
                 <FileText className="size-3.5" />
-                Certificates ({certificates.length})
+                Certificates ({certificates.length} document{certificates.length !== 1 ? 's' : ''})
               </div>
               <button
                 onClick={handleFileUpload}

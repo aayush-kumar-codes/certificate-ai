@@ -19,6 +19,8 @@ export interface Certificate {
   uploadError?: string
   evaluationError?: string
   sessionId?: string
+  documentId?: string // Backend document ID from Pinecone
+  documentIndex?: number // Document index (1, 2, 3...)
 }
 
 export interface ChatMessage {

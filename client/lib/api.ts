@@ -4,7 +4,22 @@ const ASK_API_URL = "http://116.202.210.102:5001/api/chat"
 export interface UploadResponse {
   message: string
   sessionId: string
-  status: string
+  status?: string
+  documentCount?: number
+  documents?: Array<{
+    documentId: string
+    documentName: string
+    documentIndex: number
+  }>
+  allDocuments?: Array<{
+    documentId: string
+    documentName: string
+    documentIndex: number
+  }>
+  errors?: Array<{
+    fileName: string
+    error: string
+  }>
 }
 
 export interface AskResponse {
@@ -36,21 +51,38 @@ export async function uploadPDF(
   sessionId?: string,
   onProgress?: (message: string) => void,
 ): Promise<UploadResponse> {
-  const isImage = file.type.startsWith("image/")
-  const fileType = isImage ? "Image" : "PDF"
+  return uploadPDFs([file], sessionId, onProgress)
+}
+
+export async function uploadPDFs(
+  files: File[],
+  sessionId?: string,
+  onProgress?: (message: string) => void,
+): Promise<UploadResponse> {
+  if (!files || files.length === 0) {
+    throw new Error("No files provided")
+  }
+
+  const fileCount = files.length
+  const fileType = files[0].type.startsWith("image/") ? "Image" : "PDF"
 
   if (onProgress) {
-    onProgress(`Uploading ${fileType}...`)
+    onProgress(`Uploading ${fileCount} file${fileCount > 1 ? 's' : ''}...`)
   }
 
   const formData = new FormData()
-  formData.append("pdf", file)
+  
+  // Append all files with the same field name "pdf" (multer.array expects this)
+  files.forEach((file) => {
+    formData.append("pdf", file)
+  })
+  
   if (sessionId) {
     formData.append("sessionId", sessionId)
   }
 
   if (onProgress) {
-    onProgress(`Processing ${fileType}...`)
+    onProgress(`Processing ${fileCount} file${fileCount > 1 ? 's' : ''}...`)
   }
 
   try {
@@ -65,14 +97,14 @@ export async function uploadPDF(
     }
 
     if (onProgress) {
-      onProgress("Processing certificate...")
+      onProgress("Processing certificate(s)...")
     }
 
     const data: UploadResponse = await response.json()
     return data
   } catch (error) {
     throw new Error(
-      error instanceof Error ? error.message : `Failed to upload ${fileType}`,
+      error instanceof Error ? error.message : `Failed to upload ${fileCount} file${fileCount > 1 ? 's' : ''}`,
     )
   }
 }

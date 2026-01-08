@@ -7,7 +7,8 @@ import { chat } from "../controllers/chatController.js";
 const router = express.Router();
 const upload = multer({ dest: "uploads/" });
 
-router.post("/upload", upload.single("pdf"), uploadPdf);
+// Support both single and multiple file uploads
+router.post("/upload", upload.array("pdf", 10), uploadPdf);
 router.post("/chat", chat);
 
 export default router;
