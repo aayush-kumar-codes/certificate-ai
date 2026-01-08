@@ -3,7 +3,8 @@ import { RouterAgent } from "../agents/routerAgent.js";
 import { GeneralKnowledgeAgent } from "../agents/generalAgent.js";
 import { createCertificateValidationAgent } from "../agents/certificateAgent.js";
 import { hasDocumentsForSession } from "../utils/documentQuery.js";
-import { getOrCreateSession } from "../utils/sessionManager.js";   
+import { getOrCreateSession } from "../utils/sessionManager.js";
+import { saveConversationMessage } from "../services/conversationService.js";   
 function getFinalOutput(result) {
     if (!result) {
       console.log("⚠️ getFinalOutput: result is null/undefined");
@@ -136,6 +137,22 @@ function getFinalOutput(result) {
       console.log("🔗 Session ID:", currentSessionId);
       console.log(`💾 Memory Status: ${isNew ? 'NEW session - starting fresh conversation' : 'EXISTING session - conversation history preserved'}`);
       
+      // Save user message to database
+      try {
+        await saveConversationMessage({
+          sessionId: currentSessionId,
+          role: "USER",
+          content: question,
+          metadata: {
+            isNewSession: isNew,
+            memoryActive: true,
+          },
+        });
+      } catch (logError) {
+        console.error("⚠️ Failed to log user message:", logError);
+        // Continue execution even if logging fails
+      }
+      
       // Check if documents exist for this session (before routing)
       const documentsExist = await hasDocumentsForSession(currentSessionId);
       console.log("📄 Documents exist in Pinecone for session:", documentsExist);
@@ -162,6 +179,25 @@ function getFinalOutput(result) {
         const generalResult = await run(GeneralKnowledgeAgent, question, { session });
         const answer = getFinalOutput(generalResult);
         console.log(`✅ Memory: Conversation stored in MemorySession (${currentSessionId.substring(0, 8)}...)`);
+        
+        // Save bot response to database
+        try {
+          await saveConversationMessage({
+            sessionId: currentSessionId,
+            role: "ASSISTANT",
+            content: answer,
+            routerDecision: decision,
+            agentType: "GeneralKnowledgeAgent",
+            metadata: {
+              isNewSession: isNew,
+              memoryActive: true,
+            },
+          });
+        } catch (logError) {
+          console.error("⚠️ Failed to log bot response:", logError);
+          // Continue execution even if logging fails
+        }
+        
         return res.json({ 
           answer,
           sessionId: currentSessionId,
@@ -188,8 +224,28 @@ function getFinalOutput(result) {
           
           if (!documentsExistAfterWait) {
             console.log("⚠️ Upload confirmation detected but documents not found after wait");
+            const uploadWaitAnswer = "I'm waiting for your document upload. Please upload your certificate document first, then let me know when you're done.";
+            
+            // Save bot response to database
+            try {
+              await saveConversationMessage({
+                sessionId: currentSessionId,
+                role: "ASSISTANT",
+                content: uploadWaitAnswer,
+                routerDecision: decision,
+                agentType: "CertificateValidationAgent",
+                metadata: {
+                  isNewSession: isNew,
+                  memoryActive: true,
+                  waitingForUpload: true,
+                },
+              });
+            } catch (logError) {
+              console.error("⚠️ Failed to log bot response:", logError);
+            }
+            
             return res.json({
-              answer: "I'm waiting for your document upload. Please upload your certificate document first, then let me know when you're done.",
+              answer: uploadWaitAnswer,
               sessionId: currentSessionId,
               memoryActive: true,
               isNewSession: isNew,
@@ -201,8 +257,27 @@ function getFinalOutput(result) {
         // If no documents exist and not upload-related, prompt to upload
         if (!documentsExist && !isUploadRelated) {
           console.log("⚠️ Certificate question detected but no documents found");
+          const uploadPromptAnswer = "Please upload your certificate document first so I can help you.";
+          
+          // Save bot response to database
+          try {
+            await saveConversationMessage({
+              sessionId: currentSessionId,
+              role: "ASSISTANT",
+              content: uploadPromptAnswer,
+              routerDecision: decision,
+              agentType: "CertificateValidationAgent",
+              metadata: {
+                isNewSession: isNew,
+                memoryActive: true,
+              },
+            });
+          } catch (logError) {
+            console.error("⚠️ Failed to log bot response:", logError);
+          }
+          
           return res.json({
-            answer: "Please upload your certificate document first so I can help you.",
+            answer: uploadPromptAnswer,
             sessionId: currentSessionId,
             memoryActive: true,
             isNewSession: isNew
@@ -216,6 +291,26 @@ function getFinalOutput(result) {
         const certResult = await run(agent, question, { session });
         const answer = getFinalOutput(certResult);
         console.log(`✅ Memory: Conversation stored in MemorySession (${currentSessionId.substring(0, 8)}...)`);
+        
+        // Save bot response to database
+        try {
+          await saveConversationMessage({
+            sessionId: currentSessionId,
+            role: "ASSISTANT",
+            content: answer,
+            routerDecision: decision,
+            agentType: "CertificateValidationAgent",
+            metadata: {
+              isNewSession: isNew,
+              memoryActive: true,
+              documentsExist,
+            },
+          });
+        } catch (logError) {
+          console.error("⚠️ Failed to log bot response:", logError);
+          // Continue execution even if logging fails
+        }
+        
         return res.json({ 
           answer,
           sessionId: currentSessionId,
@@ -225,8 +320,26 @@ function getFinalOutput(result) {
       }
   
       // Fallback for unrecognized decisions
+      const fallbackAnswer = "I'm not sure how to handle that request.";
+      
+      // Save bot response to database
+      try {
+        await saveConversationMessage({
+          sessionId: currentSessionId,
+          role: "ASSISTANT",
+          content: fallbackAnswer,
+          routerDecision: decision || "UNKNOWN",
+          metadata: {
+            isNewSession: isNew,
+            memoryActive: true,
+          },
+        });
+      } catch (logError) {
+        console.error("⚠️ Failed to log bot response:", logError);
+      }
+      
       return res.json({ 
-        answer: "I'm not sure how to handle that request.",
+        answer: fallbackAnswer,
         sessionId: currentSessionId,
         memoryActive: true,
         isNewSession: isNew

@@ -1,0 +1,18 @@
+version: "3.9"
+
+services:
+  postgres:
+    image: postgres:16
+    container_name: certificatedb
+    restart: always
+    environment:
+      POSTGRES_USER: root
+      POSTGRES_PASSWORD: root
+      POSTGRES_DB: conversations
+    ports:
+      - "5434:5432"
+    volumes:
+      - conversation_data:/var/lib/postgresql/data
+
+volumes:
+  conversation_data:
