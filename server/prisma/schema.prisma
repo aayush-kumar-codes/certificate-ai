@@ -21,14 +21,15 @@ model User {
 }
 
 model Conversation {
-  id           Int       @id @default(autoincrement())
-  sessionId    String    @unique
-  createdAt    DateTime  @default(now())
-  updatedAt    DateTime  @updatedAt
-  messageCount Int       @default(0)
-  lastMessage  String?
-  messages     Message[]
-  feedback     Feedback?
+  id                 Int                  @id @default(autoincrement())
+  sessionId          String               @unique
+  createdAt          DateTime             @default(now())
+  updatedAt          DateTime             @updatedAt
+  messageCount       Int                  @default(0)
+  lastMessage        String?
+  messages           Message[]
+  feedback           Feedback?
+  evaluationCriteria EvaluationCriteria[]
 
   @@index([sessionId])
   @@map("conversations")
@@ -72,4 +73,17 @@ model Feedback {
 
   @@index([sessionId])
   @@map("feedbacks")
+}
+
+model EvaluationCriteria {
+  id          String      @id @default(uuid())
+  sessionId   String
+  criteria    Json        // Flexible JSON structure for criteria
+  description String?     // Natural language description
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+  conversation Conversation @relation(fields: [sessionId], references: [sessionId], onDelete: Cascade)
+
+  @@index([sessionId])
+  @@map("evaluation_criteria")
 }

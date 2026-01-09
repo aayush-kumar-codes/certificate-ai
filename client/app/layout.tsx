@@ -1,6 +1,5 @@
 import type React from "react"
 import type { Metadata } from "next"
-import Script from "next/script"
 import { Geist, Geist_Mono } from "next/font/google"
 import "./globals.css"
 
@@ -26,20 +25,6 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" className="dark">
-      <head>
-        {process.env.NODE_ENV === "development" && (
-          <>
-            <Script
-              src="//unpkg.com/react-grab/dist/index.global.js"
-              strategy="beforeInteractive"
-            />
-            <Script
-              src="//unpkg.com/@react-grab/cursor/dist/client.global.js"
-              strategy="lazyOnload"
-            />
-          </>
-        )}
-      </head>
       <body className={`${geistSans.variable} ${geistMono.variable} font-sans antialiased`} suppressHydrationWarning>{children}</body>
     </html>
   )
