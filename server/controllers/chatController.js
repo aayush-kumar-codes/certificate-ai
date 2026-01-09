@@ -4,7 +4,140 @@ import { GeneralKnowledgeAgent } from "../agents/generalAgent.js";
 import { createCertificateValidationAgent } from "../agents/certificateAgent.js";
 import { hasDocumentsForSession } from "../utils/documentQuery.js";
 import { getOrCreateSession } from "../utils/sessionManager.js";
-import { saveConversationMessage } from "../services/conversationService.js";   
+import { saveConversationMessage } from "../services/conversationService.js";
+
+/**
+ * Helper function to stream agent response using SSE format
+ */
+async function streamAgentResponse(res, agent, question, session, options = {}) {
+  const {
+    currentSessionId,
+    isNew,
+    decision,
+    agentType,
+    documentsExist,
+    metadata = {}
+  } = options;
+
+  try {
+    // Set SSE headers
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Connection', 'keep-alive');
+    res.setHeader('X-Accel-Buffering', 'no'); // Disable nginx buffering
+
+    // Run agent with streaming enabled
+    const result = await run(agent, question, { session, stream: true });
+    
+    let fullResponse = '';
+    let streamErrorOccurred = false;
+    
+    try {
+      // Stream text chunks as they arrive
+      for await (const chunk of result.toTextStream()) {
+        if (res.destroyed || res.closed) {
+          console.warn("⚠️ Response stream closed by client");
+          break;
+        }
+        fullResponse += chunk;
+        // Send chunk to client in SSE format
+        try {
+          res.write(`data: ${JSON.stringify({ type: 'chunk', text: chunk })}\n\n`);
+        } catch (writeError) {
+          console.error("❌ Error writing chunk:", writeError);
+          streamErrorOccurred = true;
+          break;
+        }
+      }
+
+      // Wait for streaming to complete (if not already errored)
+      if (!streamErrorOccurred) {
+        await result.completed;
+      }
+    } catch (streamError) {
+      console.error("❌ Error during streaming:", streamError);
+      streamErrorOccurred = true;
+      // Try to send error event if stream is still open
+      if (!res.destroyed && !res.closed) {
+        try {
+          res.write(`data: ${JSON.stringify({
+            type: 'error',
+            error: 'Streaming failed',
+            message: streamError.message || 'Unknown streaming error'
+          })}\n\n`);
+        } catch (writeError) {
+          console.error("❌ Failed to write error event:", writeError);
+        }
+      }
+      res.end();
+      return;
+    }
+
+    // Only proceed if streaming completed successfully
+    if (!streamErrorOccurred && !res.destroyed && !res.closed) {
+      console.log(`✅ Memory: Conversation stored in MemorySession (${currentSessionId.substring(0, 8)}...)`);
+
+      // Save bot response to database
+      let messageId = null;
+      try {
+        const savedMessage = await saveConversationMessage({
+          sessionId: currentSessionId,
+          role: "ASSISTANT",
+          content: fullResponse.trim(),
+          routerDecision: decision,
+          agentType: agentType,
+          metadata: {
+            isNewSession: isNew,
+            memoryActive: true,
+            documentsExist,
+            ...metadata,
+          },
+        });
+        messageId = savedMessage.id;
+      } catch (logError) {
+        console.error("⚠️ Failed to log bot response:", logError);
+        // Continue execution even if logging fails
+      }
+
+      // Send final completion event with metadata
+      try {
+        res.write(`data: ${JSON.stringify({
+          type: 'done',
+          sessionId: currentSessionId,
+          memoryActive: true,
+          isNewSession: isNew,
+          ...(messageId && { messageId })
+        })}\n\n`);
+        res.end();
+      } catch (writeError) {
+        console.error("❌ Error writing completion event:", writeError);
+        if (!res.destroyed && !res.closed) {
+          res.end();
+        }
+      }
+    }
+  } catch (streamError) {
+    console.error("❌ Streaming error:", streamError);
+    // Send error event to client if stream is still open
+    if (!res.destroyed && !res.closed && !res.headersSent) {
+      try {
+        res.setHeader('Content-Type', 'text/event-stream');
+        res.setHeader('Cache-Control', 'no-cache');
+        res.setHeader('Connection', 'keep-alive');
+        res.write(`data: ${JSON.stringify({
+          type: 'error',
+          error: 'Streaming failed',
+          message: streamError.message || 'Unknown error occurred'
+        })}\n\n`);
+      } catch (writeError) {
+        console.error("❌ Failed to write error event:", writeError);
+      }
+    }
+    if (!res.destroyed && !res.closed) {
+      res.end();
+    }
+  }
+}   
 function getFinalOutput(result) {
     if (!result) {
       console.log("⚠️ getFinalOutput: result is null/undefined");
@@ -157,7 +290,7 @@ function getFinalOutput(result) {
       const documentsExist = await hasDocumentsForSession(currentSessionId);
       console.log("📄 Documents exist in Pinecone for session:", documentsExist);
       
-      // Run router agent with session for memory
+      // Run router agent with session for memory (non-streaming for quick decision)
       const routerResult = await run(RouterAgent, question, { session });
       
       // Debug: Check finalOutput (primary method per docs)
@@ -176,37 +309,19 @@ function getFinalOutput(result) {
       }
   
       if (decision === "GENERAL") {
-        const generalResult = await run(GeneralKnowledgeAgent, question, { session });
-        const answer = getFinalOutput(generalResult);
-        console.log(`✅ Memory: Conversation stored in MemorySession (${currentSessionId.substring(0, 8)}...)`);
-        
-        // Save bot response to database
-        let messageId = null;
-        try {
-          const savedMessage = await saveConversationMessage({
-            sessionId: currentSessionId,
-            role: "ASSISTANT",
-            content: answer,
-            routerDecision: decision,
-            agentType: "GeneralKnowledgeAgent",
-            metadata: {
-              isNewSession: isNew,
-              memoryActive: true,
-            },
-          });
-          messageId = savedMessage.id;
-        } catch (logError) {
-          console.error("⚠️ Failed to log bot response:", logError);
-          // Continue execution even if logging fails
-        }
-        
-        return res.json({ 
-          answer,
-          sessionId: currentSessionId,
-          memoryActive: true,
-          isNewSession: isNew,
-          ...(messageId && { messageId })
-        });
+        // Stream the GeneralKnowledgeAgent response
+        return await streamAgentResponse(
+          res,
+          GeneralKnowledgeAgent,
+          question,
+          session,
+          {
+            currentSessionId,
+            isNew,
+            decision,
+            agentType: "GeneralKnowledgeAgent"
+          }
+        );
       }
   
       if (decision === "CERTIFICATE") {
@@ -297,38 +412,21 @@ function getFinalOutput(result) {
         // Create agent with session-specific tool (includes sessionId filtering)
         const agent = createCertificateValidationAgent(currentSessionId);
         console.log("✅ Processing certificate question with memory");
-        const certResult = await run(agent, question, { session });
-        const answer = getFinalOutput(certResult);
-        console.log(`✅ Memory: Conversation stored in MemorySession (${currentSessionId.substring(0, 8)}...)`);
         
-        // Save bot response to database
-        let messageId = null;
-        try {
-          const savedMessage = await saveConversationMessage({
-            sessionId: currentSessionId,
-            role: "ASSISTANT",
-            content: answer,
-            routerDecision: decision,
+        // Stream the CertificateValidationAgent response
+        return await streamAgentResponse(
+          res,
+          agent,
+          question,
+          session,
+          {
+            currentSessionId,
+            isNew,
+            decision,
             agentType: "CertificateValidationAgent",
-            metadata: {
-              isNewSession: isNew,
-              memoryActive: true,
-              documentsExist,
-            },
-          });
-          messageId = savedMessage.id;
-        } catch (logError) {
-          console.error("⚠️ Failed to log bot response:", logError);
-          // Continue execution even if logging fails
-        }
-        
-        return res.json({ 
-          answer,
-          sessionId: currentSessionId,
-          memoryActive: true,
-          isNewSession: isNew,
-          ...(messageId && { messageId })
-        });
+            documentsExist
+          }
+        );
       }
   
       // Fallback for unrecognized decisions

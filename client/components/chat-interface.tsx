@@ -14,6 +14,7 @@ export function ChatInterface() {
   const loadingMessage = useChatStore((state: ChatStore) => state.loadingMessage)
   const showSimpleLoader = useChatStore((state: ChatStore) => state.showSimpleLoader)
   const addMessage = useChatStore((state: ChatStore) => state.addMessage)
+  const updateLastMessage = useChatStore((state: ChatStore) => state.updateLastMessage)
   const setLoading = useChatStore((state: ChatStore) => state.setLoading)
   const sessionId = useChatStore((state: ChatStore) => state.sessionId)
   const setSessionId = useChatStore((state: ChatStore) => state.setSessionId)
@@ -125,39 +126,122 @@ export function ChatInterface() {
       console.log("  - Frontend messages in store:", messages.length);
       console.log("  - ℹ️ Chat history is stored in MemorySession on server");
 
-      const response = await askQuestion(question, sessionId || null, (message) => {
-        // Keep simple loader for follow-up questions
-        setLoading(true, "", true)
-      })
-      
-      console.log("=== Frontend: Received Response ===");
-      console.log("  - SessionId:", response.sessionId);
-      console.log("  - Status:", response.status);
-      console.log("  - Memory Active:", response.memoryActive ? "✅ YES" : "❌ NO");
-      console.log("  - Is New Session:", response.isNewSession ? "🆕 YES" : "📚 NO (using existing memory)");
+      let accumulatedText = ""
+      let botMessageCreated = false
 
-      // Update sessionId if returned (should be same, but just in case)
-      if (response.sessionId) {
-        setSessionId(response.sessionId)
+      const response = await askQuestion(
+        question,
+        sessionId || null,
+        (message) => {
+          // Keep simple loader for follow-up questions
+          setLoading(true, "", true)
+        },
+        {
+          onChunk: (chunk: string) => {
+            // Create bot message on first chunk if not already created
+            if (!botMessageCreated) {
+              accumulatedText = chunk
+              addMessage({
+                role: "bot",
+                content: accumulatedText,
+              })
+              botMessageCreated = true
+              setLoading(false) // Hide loading indicator once we have content
+            } else {
+              // Update message content as chunks arrive
+              accumulatedText += chunk
+              updateLastMessage({
+                content: accumulatedText,
+              })
+            }
+          },
+          onComplete: (metadata) => {
+            console.log("=== Frontend: Streaming Complete ===");
+            console.log("  - SessionId:", metadata.sessionId);
+            console.log("  - Memory Active:", metadata.memoryActive ? "✅ YES" : "❌ NO");
+            console.log("  - Is New Session:", metadata.isNewSession ? "🆕 YES" : "📚 NO (using existing memory)");
+
+            // Update sessionId if returned
+            if (metadata.sessionId) {
+              setSessionId(metadata.sessionId)
+            }
+
+            // Ensure message is finalized
+            if (!botMessageCreated) {
+              // If no chunks were received, create message with empty content or error
+              if (accumulatedText) {
+                addMessage({
+                  role: "bot",
+                  content: accumulatedText,
+                })
+              } else {
+                // No content received - this shouldn't happen, but handle gracefully
+                addMessage({
+                  role: "bot",
+                  content: "No response received.",
+                })
+              }
+            } else {
+              // Update existing message with final content
+              updateLastMessage({
+                content: accumulatedText,
+              })
+            }
+
+            // Reset feedback state for new conversation turn
+            setFeedback(null)
+            setLoading(false)
+          },
+          onError: (error: string) => {
+            console.error("Streaming error:", error)
+            // Create error message if bot message wasn't created yet
+            if (!botMessageCreated) {
+              addMessage({
+                role: "bot",
+                content: `Error: ${error}`,
+              })
+            } else {
+              updateLastMessage({
+                content: `Error: ${error}`,
+              })
+            }
+            setLoading(false)
+          },
+        }
+      )
+
+      // Handle non-streaming responses (fallback cases like upload prompts)
+      if (response.answer && !botMessageCreated) {
+        console.log("=== Frontend: Received Non-Streaming Response ===");
+        console.log("  - SessionId:", response.sessionId);
+        console.log("  - Status:", response.status);
+        console.log("  - Memory Active:", response.memoryActive ? "✅ YES" : "❌ NO");
+        console.log("  - Is New Session:", response.isNewSession ? "🆕 YES" : "📚 NO (using existing memory)");
+
+        // Update sessionId if returned
+        if (response.sessionId) {
+          setSessionId(response.sessionId)
+        }
+
+        // Create the bot message with the complete response
+        addMessage({
+          role: "bot",
+          content: response.answer,
+          reasoning: response.validationResult
+            ? `Validation ${response.validationResult.passed ? "passed" : "failed"}. ${response.validationResult.checks.length} criteria checked.`
+            : undefined,
+        })
+
+        // Reset feedback state for new conversation turn
+        setFeedback(null)
+        setLoading(false)
       }
-
-      addMessage({
-        role: "bot",
-        content: response.answer,
-        reasoning: response.validationResult 
-          ? `Validation ${response.validationResult.passed ? "passed" : "failed"}. ${response.validationResult.checks.length} criteria checked.`
-          : "Processing your request.",
-      })
-
-      // Reset feedback state for new conversation turn
-      setFeedback(null)
-      setLoading(false)
     } catch (error) {
       const errorMessage =
         error instanceof Error ? error.message : "Failed to get response"
-      addMessage({
-        role: "bot",
+      updateLastMessage({
         content: `Error: ${errorMessage}`,
+        reasoning: undefined,
       })
       setLoading(false)
     }

@@ -46,6 +46,7 @@ export interface ChatStore {
   feedbackSubmitted: boolean
   feedbackType: "LIKE" | "DISLIKE" | null
   addMessage: (message: ChatMessage) => void
+  updateLastMessage: (updates: Partial<ChatMessage>) => void
   setLoading: (isLoading: boolean, message?: string, showSimpleLoader?: boolean) => void
   clearMessages: () => void
   setSessionId: (sessionId: string | null) => void
@@ -89,6 +90,15 @@ export const useChatStore = create<ChatStore>((set, get) => ({
     set((state) => ({
       messages: [...state.messages, message],
     })),
+  updateLastMessage: (updates) =>
+    set((state) => {
+      const messages = [...state.messages]
+      if (messages.length > 0) {
+        const lastMessage = messages[messages.length - 1]
+        messages[messages.length - 1] = { ...lastMessage, ...updates }
+      }
+      return { messages }
+    }),
   setLoading: (isLoading, message = "", showSimpleLoader = false) =>
     set({ isLoading, loadingMessage: message, showSimpleLoader }),
   clearMessages: () => set({ messages: [], sessionId: null, feedbackSubmitted: false, feedbackType: null }),
