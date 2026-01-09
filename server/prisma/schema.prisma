@@ -78,8 +78,9 @@ model Feedback {
 model EvaluationCriteria {
   id          String      @id @default(uuid())
   sessionId   String
-  criteria    Json        // Flexible JSON structure for criteria
+  criteria    Json        // Flexible JSON structure for criteria with weights: { "criterionName": { "weight": 0.3, "required": true, "value": "..." } }
   description String?     // Natural language description
+  threshold   Float?      @default(70) // Pass/fail threshold (0-100), defaults to 70
   createdAt   DateTime    @default(now())
   updatedAt   DateTime    @updatedAt
   conversation Conversation @relation(fields: [sessionId], references: [sessionId], onDelete: Cascade)
