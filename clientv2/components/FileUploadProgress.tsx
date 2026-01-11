@@ -87,11 +87,10 @@ function FileProgressItem({ fileItem, onCancel, onRemove }: FileProgressItemProp
         isError ? "border-red-500/30" : "border-[rgba(232,232,225,0.15)]"
       )}
       style={{
-        width: '264.6254577636719px',
-        height: '58.35846710205078px',
-        opacity: 1,
-        top: '0px',
+        width: '264.625px',
+        height: '58.358px',
         borderRadius: '7.04px',
+        opacity: 1,
         background: isError
           ? 'linear-gradient(90deg, rgba(232, 232, 225, 0.08) 50%, rgba(199, 181, 193, 0.08) 75%)'
           : 'linear-gradient(90deg, rgba(232, 232, 225, 0.12) 50%, rgba(199, 181, 193, 0.12) 75%)',
@@ -103,10 +102,10 @@ function FileProgressItem({ fileItem, onCancel, onRemove }: FileProgressItemProp
         className="flex items-center justify-center shrink-0 w-10 h-10 rounded-md bg-white/8"
       >
         <FileWithPaperclipIcon
-          width={20}
-          height={20}
+          width={15}
+          height={17}
           className={cn(
-            isError ? "text-red-400" : "text-cyan-300"
+            isError ? "text-red-400" : "text-white"
           )}
         />
       </div>

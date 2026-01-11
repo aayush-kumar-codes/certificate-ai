@@ -26,6 +26,8 @@ export default function Home() {
   const [uploadResponseMessage, setUploadResponseMessage] = useState<string | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const uploadAbortControllers = useRef<Map<string, AbortController>>(new Map())
+  const messagesEndRef = useRef<HTMLDivElement>(null)
+  const chatContainerRef = useRef<HTMLDivElement>(null)
 
   // Add upload response message to chat when upload completes
   useEffect(() => {
@@ -48,6 +50,21 @@ export default function Home() {
       }
     }
   }, [uploadFiles, uploadResponseMessage])
+
+  // Auto-scroll to bottom when messages change or loading state changes
+  useEffect(() => {
+    if (chatContainerRef.current) {
+      // Use requestAnimationFrame for better performance and immediate DOM updates
+      requestAnimationFrame(() => {
+        if (chatContainerRef.current) {
+          chatContainerRef.current.scrollTo({
+            top: chatContainerRef.current.scrollHeight,
+            behavior: 'smooth'
+          })
+        }
+      })
+    }
+  }, [chatMessages, isLoadingResponse])
 
   const generateFileId = () => {
     return `file-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
@@ -271,6 +288,16 @@ export default function Home() {
     setInputValue('')
     setIsLoadingResponse(true)
 
+    // Immediately scroll to bottom when user sends message
+    requestAnimationFrame(() => {
+      if (chatContainerRef.current) {
+        chatContainerRef.current.scrollTo({
+          top: chatContainerRef.current.scrollHeight,
+          behavior: 'smooth'
+        })
+      }
+    })
+
     try {
       let accumulatedText = ''
       let botMessageCreated = false
@@ -431,7 +458,6 @@ export default function Home() {
                   width: '26.779117584228516px',
                   height: '26.779117584228516px',
                   transform: 'rotate(90deg)',
-                  boxShadow: '0px 0px 28.36px 0px #A3BDCE80',
                 }}
               />
 
@@ -514,7 +540,7 @@ export default function Home() {
 
         {/* Chat Content Area - Centered */}
         <div className='flex flex-col !pt-10 !pb-4 gap-4 items-center justify-between w-full flex-1 min-h-0 overflow-hidden'>
-          <div className="flex-1 flex flex-col overflow-y-auto px-8 py-12 w-full max-w-4xl min-h-0">
+          <div ref={chatContainerRef} className="flex-1 flex flex-col overflow-y-auto px-8 py-12 w-full max-w-4xl min-h-0">
             {/* Initial chat message - only show if no files uploaded and no messages */}
             {!hasUploadedFiles && chatMessages.length === 0 && (
               <div className="flex items-center !pt-10 gap-4 mb-8 w-full">
@@ -530,7 +556,6 @@ export default function Home() {
                     position: 'absolute',
                     top: '339px',
                     left: '399px',
-                    boxShadow: '0px 0px 28.36px 0px #A3BDCE80',
                   }}
                 />
 
@@ -668,7 +693,6 @@ export default function Home() {
                           width: '51.04205703735356px',
                           height: '51.04205703735356px',
                           transform: 'rotate(90deg)',
-                          boxShadow: '0px 0px 28.36px 0px #A3BDCE80',
                         }}
                       />
                     )}
@@ -726,7 +750,6 @@ export default function Home() {
                     width: '51.04205703735356px',
                     height: '51.04205703735356px',
                     transform: 'rotate(90deg)',
-                    boxShadow: '0px 0px 28.36px 0px #A3BDCE80',
                   }}
                 />
                 <div
