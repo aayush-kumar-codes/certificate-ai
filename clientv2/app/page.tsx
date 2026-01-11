@@ -544,21 +544,17 @@ export default function Home() {
             {/* Initial chat message - only show if no files uploaded and no messages */}
             {!hasUploadedFiles && chatMessages.length === 0 && (
               <div className="flex items-center !pt-10 gap-4 mb-8 w-full">
+                {/* Mesh Image on the left */}
                 <img
                   src="/mesh.jpg"
                   alt="AI Agent"
-                  className="shrink-0 opacity-100 rounded-[25.52px]"
+                  className="shrink-0 opacity-100 rounded-full"
                   style={{
-                    width: '66.68106079101562px',
-                    height: '66.68106079101562px',
-                    transform: 'rotate(0deg)',
-                    opacity: 1,
-                    position: 'absolute',
-                    top: '339px',
-                    left: '399px',
+                    width: '60px',
+                    height: '60px',
+                    transform: 'rotate(90deg)',
                   }}
                 />
-
                 <div className="flex flex-col gap-2 flex-1">
                   <p
                     className="text-white font-normal text-sm tracking-normal"
@@ -676,7 +672,12 @@ export default function Home() {
 
             {/* Chat Messages */}
             {chatMessages.length > 0 && (
-              <div className="flex flex-col gap-4 mb-8 w-full">
+              <div 
+                className="flex flex-col gap-4 mb-8 w-full"
+                style={{
+                  marginTop: hasUploadedFiles && uploadFiles.length > 0 ? '50px' : undefined
+                }}
+              >
                 {chatMessages.map((msg, index) => (
                   <div
                     key={index}
