@@ -1,6 +1,23 @@
 const UPLOAD_API_URL = "http://116.202.210.102:5001/api/upload"
+const UPLOAD_PROGRESS_API_URL = "http://116.202.210.102:5001/api/upload/progress"
 const ASK_API_URL = "http://116.202.210.102:5001/api/chat"
 const FEEDBACK_API_URL = "http://116.202.210.102:5001/api/feedback"
+
+export interface UploadProgressResponse {
+  uploadId: string
+  totalFiles: number
+  currentFile: number
+  overallProgress: number
+  status: 'uploading' | 'processing' | 'completed' | 'error'
+  files: Array<{
+    fileName: string
+    progress: number
+    status: 'uploading' | 'processing' | 'completed' | 'error'
+  }>
+  elapsedTime: number
+  finalResult?: UploadResponse
+  error?: string
+}
 
 export interface UploadResponse {
   message: string
@@ -21,6 +38,7 @@ export interface UploadResponse {
     fileName: string
     error: string
   }>
+  uploadId?: string
 }
 
 export interface AskResponse {
@@ -75,10 +93,35 @@ export async function uploadPDF(
   return uploadPDFs([file], sessionId, onProgress)
 }
 
+/**
+ * Poll for upload progress
+ */
+export async function getUploadProgress(
+  uploadId: string,
+  signal?: AbortSignal,
+): Promise<UploadProgressResponse> {
+  const controller = signal ? new AbortController() : undefined
+  if (signal) {
+    signal.addEventListener('abort', () => controller?.abort())
+  }
+
+  const response = await fetch(`${UPLOAD_PROGRESS_API_URL}/${uploadId}`, {
+    method: 'GET',
+    signal: controller?.signal || signal,
+  })
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({ error: "Failed to get progress" }))
+    throw new Error(errorData.error || "Failed to get upload progress")
+  }
+
+  return response.json()
+}
+
 export async function uploadPDFs(
   files: File[],
   sessionId?: string,
-  onProgress?: (progress: number) => void,
+  onProgress?: (progress: number, fileProgress?: Map<string, number>) => void,
   signal?: AbortSignal,
 ): Promise<UploadResponse> {
   if (!files || files.length === 0) {
@@ -102,16 +145,6 @@ export async function uploadPDFs(
   try {
     const xhr = new XMLHttpRequest()
 
-    // Track upload progress
-    if (onProgress) {
-      xhr.upload.addEventListener('progress', (e) => {
-        if (e.lengthComputable) {
-          const percentComplete = (e.loaded / e.total) * 100
-          onProgress(percentComplete)
-        }
-      })
-    }
-
     // Handle abort signal
     if (signal) {
       signal.addEventListener('abort', () => {
@@ -119,12 +152,21 @@ export async function uploadPDFs(
       })
     }
 
-    const response = await new Promise<UploadResponse>((resolve, reject) => {
+    // Start upload and get uploadId
+    const initialResponse = await new Promise<{ uploadId: string; totalFiles: number }>((resolve, reject) => {
       xhr.addEventListener('load', () => {
-        if (xhr.status >= 200 && xhr.status < 300) {
+        if (xhr.status === 202) {
+          try {
+            const data = JSON.parse(xhr.responseText)
+            resolve({ uploadId: data.uploadId, totalFiles: data.totalFiles })
+          } catch (error) {
+            reject(new Error("Failed to parse response"))
+          }
+        } else if (xhr.status >= 200 && xhr.status < 300) {
+          // Legacy response format (non-async)
           try {
             const data: UploadResponse = JSON.parse(xhr.responseText)
-            resolve(data)
+            resolve({ uploadId: data.uploadId || '', totalFiles: fileCount })
           } catch (error) {
             reject(new Error("Failed to parse response"))
           }
@@ -150,7 +192,18 @@ export async function uploadPDFs(
       xhr.send(formData)
     })
 
-    return response
+    // If we got an uploadId, poll for progress
+    if (initialResponse.uploadId) {
+      return await pollUploadProgress(
+        initialResponse.uploadId,
+        files.map(f => f.name),
+        onProgress,
+        signal
+      )
+    }
+
+    // Fallback: if no uploadId, return empty response (shouldn't happen)
+    throw new Error("No uploadId received from server")
   } catch (error) {
     if (signal?.aborted) {
       throw new Error("Upload cancelled")
@@ -158,6 +211,68 @@ export async function uploadPDFs(
     throw new Error(
       error instanceof Error ? error.message : `Failed to upload ${fileCount} file${fileCount > 1 ? 's' : ''}`,
     )
+  }
+}
+
+/**
+ * Poll for upload progress until completion
+ */
+async function pollUploadProgress(
+  uploadId: string,
+  fileNames: string[],
+  onProgress?: (progress: number, fileProgress?: Map<string, number>) => void,
+  signal?: AbortSignal,
+): Promise<UploadResponse> {
+  const pollInterval = 500 // Poll every 500ms
+  const maxPollTime = 5 * 60 * 1000 // Max 5 minutes
+  const startTime = Date.now()
+
+  while (true) {
+    // Check timeout
+    if (Date.now() - startTime > maxPollTime) {
+      throw new Error("Upload timeout - exceeded maximum polling time")
+    }
+
+    // Check abort signal
+    if (signal?.aborted) {
+      throw new Error("Upload cancelled")
+    }
+
+    try {
+      const progress = await getUploadProgress(uploadId, signal)
+
+      // Update progress callback
+      if (onProgress) {
+        const fileProgressMap = new Map<string, number>()
+        progress.files.forEach((file) => {
+          fileProgressMap.set(file.fileName, file.progress)
+        })
+        onProgress(progress.overallProgress, fileProgressMap)
+      }
+
+      // If completed, return final result
+      if (progress.status === 'completed' && progress.finalResult) {
+        return progress.finalResult
+      }
+
+      // If error, throw
+      if (progress.status === 'error') {
+        throw new Error(progress.error || "Upload failed")
+      }
+
+      // Wait before next poll
+      await new Promise(resolve => setTimeout(resolve, pollInterval))
+    } catch (error) {
+      if (signal?.aborted || (error instanceof Error && error.message === "Upload cancelled")) {
+        throw new Error("Upload cancelled")
+      }
+      // If it's a 404, the upload might not have started yet, continue polling
+      if (error instanceof Error && error.message.includes("not found")) {
+        await new Promise(resolve => setTimeout(resolve, pollInterval))
+        continue
+      }
+      throw error
+    }
   }
 }
 

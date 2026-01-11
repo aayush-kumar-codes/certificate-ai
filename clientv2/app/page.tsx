@@ -137,10 +137,11 @@ export default function Home() {
       const response = await uploadPDFs(
         validFiles,
         sessionId,
-        (progress) => {
-          // Update all files with same progress
+        (overallProgress, fileProgressMap) => {
+          // Update each file with its individual progress
           newFileItems.forEach((item) => {
-            updateFileProgress(item.id, { progress })
+            const fileProgress = fileProgressMap?.get(item.file.name) || 0
+            updateFileProgress(item.id, { progress: fileProgress })
           })
         },
         controller.signal
