@@ -232,8 +232,8 @@ export default function Home() {
         return
       }
       
-      // Store files for upload when Enter is pressed
-      setSelectedFiles(validFiles)
+      // Immediately upload files when selected (especially during ongoing conversation)
+      handleFileUpload(validFiles)
       
       // Reset file input
       if (fileInputRef.current) {
@@ -270,8 +270,8 @@ export default function Home() {
         return
       }
       
-      // Store files for upload when Enter is pressed
-      setSelectedFiles(validFiles)
+      // Immediately upload files when dropped
+      handleFileUpload(validFiles)
     }
   }
 
@@ -540,7 +540,13 @@ export default function Home() {
 
         {/* Chat Content Area - Centered */}
         <div className='flex flex-col !pt-10 !pb-4 gap-4 items-center justify-between w-full flex-1 min-h-0 overflow-hidden'>
-          <div ref={chatContainerRef} className="flex-1 flex flex-col overflow-y-auto px-8 py-12 w-full max-w-4xl min-h-0">
+          <div 
+            ref={chatContainerRef} 
+            className="flex-1 flex flex-col overflow-y-auto px-8 py-12 w-full max-w-4xl min-h-0"
+            onDragOver={handleDragOver}
+            onDragLeave={handleDragLeave}
+            onDrop={handleDrop}
+          >
             {/* Initial chat message - only show if no files uploaded and no messages */}
             {!hasUploadedFiles && chatMessages.length === 0 && (
               <div className="flex items-center !pt-10 gap-4 mb-8 w-full">
@@ -572,14 +578,6 @@ export default function Home() {
             {/* File Upload Zone - hide when files are uploaded */}
             {!hasUploadedFiles && (
               <div className="w-full max-w-3xl !pt-5 mx-auto">
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept=".pdf,image/*"
-                  multiple
-                  onChange={handleFileSelect}
-                  className="hidden"
-                />
                 <div
                   onClick={handleUploadClick}
                   onDragOver={handleDragOver}
@@ -785,8 +783,8 @@ export default function Home() {
             )}
           </div>
 
-          {/* Show selected files indicator */}
-          {selectedFiles.length > 0 && uploadFiles.length === 0 && (
+          {/* Show selected files indicator - only show if files are selected but not yet uploaded */}
+          {selectedFiles.length > 0 && (
             <div className="w-full max-w-4xl px-8 flex-shrink-0 pb-2">
               <p
                 className="text-white font-normal text-sm tracking-normal mb-2"
@@ -808,6 +806,15 @@ export default function Home() {
           >
             {/* Chat Input Bar */}
             <div className="flex items-center !px-2 gap-3 h-full w-full">
+              {/* Hidden file input - always accessible */}
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept=".pdf,image/*"
+                multiple
+                onChange={handleFileSelect}
+                className="hidden"
+              />
               {/* Attach Button */}
               <button
                 onClick={handleUploadClick}
