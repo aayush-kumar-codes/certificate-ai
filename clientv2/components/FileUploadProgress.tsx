@@ -22,20 +22,31 @@ export function FileUploadProgress({ files, onCancel, onRemove }: FileUploadProg
   if (files.length === 0) return null
 
   return (
-    <div className="flex flex-col gap-3 w-full">
-      {/* Header text */}
+    <div className="relative w-full">
+      {/* Header text - absolutely positioned */}
       <p
-        className="text-white font-normal text-sm tracking-normal mb-2"
+        className="text-white font-normal text-sm tracking-normal absolute"
         style={{
           fontFamily: 'Poppins, sans-serif',
           fontStyle: 'normal',
+          width: '394px',
+          height: '21px',
+          opacity: 1,
+          top: '24px',
+          left: '28px',
+          transform: 'rotate(0deg)',
         }}
       >
         Ok here are the files
       </p>
 
-      {/* Files container - horizontal layout */}
-      <div className="flex items-center gap-3 flex-wrap">
+      {/* Files container - horizontal layout with top padding to avoid overlap */}
+      <div 
+        className="flex items-center gap-3 flex-wrap"
+        style={{
+          paddingTop: '60px', // 24px (top) + 21px (text height) + 15px (spacing)
+        }}
+      >
         {files.map((fileItem) => (
           <FileProgressItem
             key={fileItem.id}
@@ -72,12 +83,15 @@ function FileProgressItem({ fileItem, onCancel, onRemove }: FileProgressItemProp
   return (
     <div
       className={cn(
-        "flex items-center justify-start gap-3 relative opacity-100 rounded-[7.04px] p-3 px-4 border",
+        "flex items-center justify-start gap-3 relative p-3 px-4 border",
         isError ? "border-red-500/30" : "border-[rgba(232,232,225,0.15)]"
       )}
       style={{
         width: '264.6254577636719px',
         height: '58.35846710205078px',
+        opacity: 1,
+        top: '0px',
+        borderRadius: '7.04px',
         background: isError
           ? 'linear-gradient(90deg, rgba(232, 232, 225, 0.08) 50%, rgba(199, 181, 193, 0.08) 75%)'
           : 'linear-gradient(90deg, rgba(232, 232, 225, 0.12) 50%, rgba(199, 181, 193, 0.12) 75%)',

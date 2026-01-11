@@ -238,6 +238,35 @@ export default function Home() {
   return (
     <section className="flex mx-auto bg-[#1b1b1b] relative overflow-hidden min-h-screen">
       {/* <section className="w-[1728px] h-[960px] flex mx-auto bg-[#000000] relative overflow-hidden"> */}
+      {/* Certificate Images Display */}
+      <div
+        className="flex items-center gap-4 absolute"
+        style={{
+          width: '814px',
+          height: '58.35846710205078px',
+          transform: 'rotate(0deg)',
+          opacity: 1,
+          top: '61px',
+          left: '28px',
+        }}
+      >
+        <div className="flex-1 h-full">
+          <img
+            src="/certificate1.jpeg"
+            alt="Certificate 1"
+            className="w-full h-full object-contain"
+            style={{ width: '100%', height: '100%' }}
+          />
+        </div>
+        <div className="flex-1 h-full">
+          <img
+            src="/certificate2.jpeg"
+            alt="Certificate 2"
+            className="w-full h-full object-contain"
+            style={{ width: '100%', height: '100%' }}
+          />
+        </div>
+      </div>
       {/* Left Menu */}
       <LeftMenu />
 
@@ -476,10 +505,13 @@ export default function Home() {
                 />
                 <div className="flex flex-col gap-3 flex-1">
                   <div
-                    className="rounded-[7px] p-4 w-full"
+                    className="p-4 opacity-100 min-h-[149px]"
                     style={{
-                      background: 'linear-gradient(90deg, rgba(88, 132, 206, 0.1) 0%, rgba(227, 196, 193, 0.1) 50%, rgba(225, 231, 203, 0.1) 75%, rgba(177, 162, 195, 0.1) 100%)',
-                      border: '1px solid rgba(232, 232, 225, 0.15)',
+                      width: '875px',
+                      background: 'linear-gradient(90deg, rgba(88, 132, 206, 0.2) 0%, rgba(227, 196, 193, 0.2) 50%, rgba(225, 231, 203, 0.2) 75%, rgba(177, 162, 195, 0.2) 100%)',
+                      borderTopLeftRadius: '30px',
+                      borderBottomRightRadius: '30px',
+                      borderBottomLeftRadius: '30px',
                     }}
                   >
                     <FileUploadProgress
