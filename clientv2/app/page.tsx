@@ -368,7 +368,7 @@ export default function Home() {
     }
   }
   return (
-    <section className="flex mx-auto bg-[#1b1b1b] relative overflow-hidden min-h-screen">
+    <section className="flex mx-auto bg-[#1b1b1b] relative overflow-hidden h-screen">
       {/* <section className="w-[1728px] h-[960px] flex mx-auto bg-[#000000] relative overflow-hidden"> */}
       {/* Certificate Images Display */}
       <div
@@ -403,7 +403,7 @@ export default function Home() {
       <LeftMenu />
 
       {/* Main Content Area */}
-      <main className="flex-1 !pt-20 relative flex flex-col items-center bg-[#1b1b1b] w-full min-h-screen">
+      <main className="flex-1 !pt-20 relative flex flex-col items-center bg-[#1b1b1b] w-full min-h-0 overflow-hidden">
         <div
           className="mx-auto mt-8 opacity-100 w-[536px] h-[55px] rounded-[60px] p-[1px]"
           style={{
@@ -513,8 +513,8 @@ export default function Home() {
         </div>
 
         {/* Chat Content Area - Centered */}
-        <div className='flex flex-col !pt-10 !pb-10 gap-10 items-center justify-space-between h-full w-full'>
-          <div className="flex-1 flex flex-col  px-8 py-12 w-full max-w-4xl">
+        <div className='flex flex-col !pt-10 !pb-4 gap-4 items-center justify-between w-full flex-1 min-h-0 overflow-hidden'>
+          <div className="flex-1 flex flex-col overflow-y-auto px-8 py-12 w-full max-w-4xl min-h-0">
             {/* Initial chat message - only show if no files uploaded and no messages */}
             {!hasUploadedFiles && chatMessages.length === 0 && (
               <div className="flex items-center !pt-10 gap-4 mb-8 w-full">
@@ -754,7 +754,7 @@ export default function Home() {
 
           {/* Show selected files indicator */}
           {selectedFiles.length > 0 && uploadFiles.length === 0 && (
-            <div className="w-full max-w-4xl px-8">
+            <div className="w-full max-w-4xl px-8 flex-shrink-0 pb-2">
               <p
                 className="text-white font-normal text-sm tracking-normal mb-2"
                 style={{
@@ -768,7 +768,7 @@ export default function Home() {
           )}
 
           <div
-            className="opacity-100 h-[54px] w-[1016px] rounded-[37px] border border-[#303030]"
+            className="opacity-100 h-[54px] w-full max-w-[1016px] rounded-[37px] border border-[#303030] flex-shrink-0 mb-4 mx-auto"
             style={{
               background: 'linear-gradient(90deg, rgba(88, 132, 206, 0.05) 0%, rgba(177, 162, 195, 0.05) 100%)',
             }}
