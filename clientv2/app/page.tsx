@@ -1,23 +1,53 @@
 'use client'
 
-import React, { useState, useRef } from 'react'
+import React, { useState, useRef, useEffect } from 'react'
 import { LeftMenu } from '@/components/LeftMenu'
 import { RightMenu } from '@/components/RightMenu'
 import { X } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { DocumentWithBadgeIcon, ShareIcon, BellIcon, ChevronDownIcon, UploadIcon, MicIcon, PaperclipIcon, FolderOpenIcon, SendIcon, FileWithPaperclipIcon, CloseIcon } from '@/components/icons'
 import { FileUploadProgress, FileUploadItem } from '@/components/FileUploadProgress'
-import { uploadPDFs, UploadResponse } from '@/lib/api'
+import { uploadPDFs, UploadResponse, askQuestion, AskResponse } from '@/lib/api'
+
+interface ChatMessage {
+  role: 'user' | 'bot'
+  content: string
+}
 
 export default function Home() {
   const [uploadFiles, setUploadFiles] = useState<FileUploadItem[]>([])
   const [isDragging, setIsDragging] = useState(false)
   const [sessionId, setSessionId] = useState<string | undefined>()
   const [selectedFiles, setSelectedFiles] = useState<File[]>([])
-  const [inputValue, setInputValue] = useState('ok here are the files')
+  const [inputValue, setInputValue] = useState('')
   const [hasUploadedFiles, setHasUploadedFiles] = useState(false)
+  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([])
+  const [isLoadingResponse, setIsLoadingResponse] = useState(false)
+  const [uploadResponseMessage, setUploadResponseMessage] = useState<string | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const uploadAbortControllers = useRef<Map<string, AbortController>>(new Map())
+
+  // Add upload response message to chat when upload completes
+  useEffect(() => {
+    if (uploadResponseMessage && uploadFiles.length > 0) {
+      const allCompleted = uploadFiles.every(file => file.status === 'completed' || file.status === 'error')
+      if (allCompleted) {
+        // Add upload response message to chat messages
+        setChatMessages((prev) => {
+          // Check if message already exists to avoid duplicates
+          const alreadyExists = prev.some(
+            (msg) => msg.role === 'bot' && msg.content === uploadResponseMessage
+          )
+          if (!alreadyExists) {
+            return [...prev, { role: 'bot', content: uploadResponseMessage }]
+          }
+          return prev
+        })
+        // Don't clear upload files - keep them visible
+        setUploadResponseMessage(null)
+      }
+    }
+  }, [uploadFiles, uploadResponseMessage])
 
   const generateFileId = () => {
     return `file-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
@@ -76,6 +106,8 @@ export default function Home() {
     // Set upload files immediately to show the progress component
     setUploadFiles(newFileItems)
     setHasUploadedFiles(true) // Hide upload zone and show chat interface
+    setIsLoadingResponse(false) // Reset loading state
+    setUploadResponseMessage(null) // Clear previous upload response message
 
     // Upload all files together (as the API expects)
     const controller = new AbortController()
@@ -132,8 +164,27 @@ export default function Home() {
       }
 
       // Set session ID if provided
+      const newSessionId = response.sessionId || sessionId
       if (response.sessionId && !sessionId) {
         setSessionId(response.sessionId)
+      }
+
+      // Store the upload response message to show after upload completes
+      if (response.message) {
+        setUploadResponseMessage(response.message)
+      }
+
+      // Handle errors if any - add error messages to chat
+      if (response.errors && response.errors.length > 0) {
+        response.errors.forEach((error) => {
+          setChatMessages((prev) => [
+            ...prev,
+            {
+              role: 'bot',
+              content: `Failed to process ${error.fileName}: ${error.error}`,
+            },
+          ])
+        })
       }
     } catch (error) {
       // Handle upload error
@@ -211,6 +262,83 @@ export default function Home() {
     fileInputRef.current?.click()
   }
 
+  const sendMessage = async (message: string) => {
+    if (!message.trim() || isLoadingResponse) return
+
+    // Add user message to chat
+    const userMessage: ChatMessage = { role: 'user', content: message }
+    setChatMessages((prev) => [...prev, userMessage])
+    setInputValue('')
+    setIsLoadingResponse(true)
+
+    try {
+      let accumulatedText = ''
+      let botMessageCreated = false
+
+      await askQuestion(
+        message,
+        sessionId || undefined,
+        undefined,
+        {
+          onChunk: (chunk: string) => {
+            if (!botMessageCreated) {
+              accumulatedText = chunk
+              setChatMessages((prev) => [
+                ...prev,
+                { role: 'bot', content: accumulatedText },
+              ])
+              botMessageCreated = true
+            } else {
+              accumulatedText += chunk
+              setChatMessages((prev) => {
+                const newMessages = [...prev]
+                newMessages[newMessages.length - 1] = {
+                  role: 'bot',
+                  content: accumulatedText,
+                }
+                return newMessages
+              })
+            }
+          },
+          onComplete: (metadata) => {
+            if (metadata.sessionId && !sessionId) {
+              setSessionId(metadata.sessionId)
+            }
+            if (!botMessageCreated && accumulatedText) {
+              setChatMessages((prev) => [
+                ...prev,
+                { role: 'bot', content: accumulatedText },
+              ])
+            }
+            setIsLoadingResponse(false)
+          },
+          onError: (error: string) => {
+            setChatMessages((prev) => {
+              const newMessages = [...prev]
+              if (botMessageCreated) {
+                newMessages[newMessages.length - 1] = {
+                  role: 'bot',
+                  content: `Error: ${error}`,
+                }
+              } else {
+                newMessages.push({ role: 'bot', content: `Error: ${error}` })
+              }
+              return newMessages
+            })
+            setIsLoadingResponse(false)
+          },
+        }
+      )
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Failed to send message'
+      setChatMessages((prev) => [
+        ...prev,
+        { role: 'bot', content: `Error: ${errorMessage}` },
+      ])
+      setIsLoadingResponse(false)
+    }
+  }
+
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault()
@@ -221,8 +349,9 @@ export default function Home() {
         handleFileUpload(selectedFiles)
         setSelectedFiles([]) // Clear selected files after starting upload
         setInputValue('') // Clear input
-      } else {
-        console.log('No files selected')
+      } else if (inputValue.trim()) {
+        // If no files but there's text input, send the message
+        sendMessage(inputValue.trim())
       }
     }
   }
@@ -233,6 +362,9 @@ export default function Home() {
       handleFileUpload(selectedFiles)
       setSelectedFiles([]) // Clear selected files after starting upload
       setInputValue('') // Clear input
+    } else if (inputValue.trim()) {
+      // If no files but there's text input, send the message
+      sendMessage(inputValue.trim())
     }
   }
   return (
@@ -307,7 +439,7 @@ export default function Home() {
                 <span
                   className="text-gray-400 mb-0.5 font-medium text-[10px] leading-none tracking-normal"
                   style={{
-                    fontFamily: 'Poppins, sans-serif',
+                    fontFamily: 'var(--font-poppins), Poppins, sans-serif',
                     fontStyle: 'normal',
                   }}
                 >
@@ -317,7 +449,7 @@ export default function Home() {
                   <span
                     className="text-white font-medium text-xs leading-none tracking-normal"
                     style={{
-                      fontFamily: 'Poppins, sans-serif',
+                      fontFamily: 'var(--font-poppins), Poppins, sans-serif',
                       fontStyle: 'normal',
                     }}
                   >
@@ -346,7 +478,7 @@ export default function Home() {
                 <span
                   className="text-gray-400 mb-0.5 font-medium text-[10px] leading-none tracking-normal"
                   style={{
-                    fontFamily: 'Poppins, sans-serif',
+                    fontFamily: 'var(--font-poppins), Poppins, sans-serif',
                     fontStyle: 'normal',
                   }}
                 >
@@ -355,7 +487,7 @@ export default function Home() {
                 <span
                   className="text-white font-medium text-xs leading-none tracking-normal"
                   style={{
-                    fontFamily: 'Poppins, sans-serif',
+                    fontFamily: 'var(--font-poppins), Poppins, sans-serif',
                     fontStyle: 'normal',
                   }}
                 >
@@ -383,17 +515,21 @@ export default function Home() {
         {/* Chat Content Area - Centered */}
         <div className='flex flex-col !pt-10 !pb-10 gap-10 items-center justify-space-between h-full w-full'>
           <div className="flex-1 flex flex-col  px-8 py-12 w-full max-w-4xl">
-            {/* Initial chat message - only show if no files uploaded */}
-            {!hasUploadedFiles && (
+            {/* Initial chat message - only show if no files uploaded and no messages */}
+            {!hasUploadedFiles && chatMessages.length === 0 && (
               <div className="flex items-center !pt-10 gap-4 mb-8 w-full">
                 <img
                   src="/mesh.jpg"
                   alt="AI Agent"
                   className="shrink-0 opacity-100 rounded-[25.52px]"
                   style={{
-                    width: '51.04205703735356px',
-                    height: '51.04205703735356px',
-                    transform: 'rotate(90deg)',
+                    width: '66.68106079101562px',
+                    height: '66.68106079101562px',
+                    transform: 'rotate(0deg)',
+                    opacity: 1,
+                    position: 'absolute',
+                    top: '339px',
+                    left: '399px',
                     boxShadow: '0px 0px 28.36px 0px #A3BDCE80',
                   }}
                 />
@@ -402,7 +538,7 @@ export default function Home() {
                   <p
                     className="text-white font-normal text-sm tracking-normal"
                     style={{
-                      fontFamily: 'Poppins, sans-serif',
+                      fontFamily: 'var(--font-poppins), Poppins, sans-serif',
                       fontStyle: 'normal',
                     }}
                   >
@@ -470,7 +606,7 @@ export default function Home() {
                   <p
                     className="text-white mb-2 font-medium text-lg leading-[40px] tracking-[-0.25px] text-center"
                     style={{
-                      fontFamily: 'Poppins, sans-serif',
+                      fontFamily: 'var(--font-poppins), Poppins, sans-serif',
                       fontStyle: 'normal',
                     }}
                   >
@@ -479,7 +615,7 @@ export default function Home() {
                   <p
                     className="text-gray-400 font-normal text-sm leading-[16.2px] tracking-[-0.31px] text-center"
                     style={{
-                      fontFamily: 'Poppins, sans-serif',
+                      fontFamily: 'var(--font-poppins), Poppins, sans-serif',
                       fontStyle: 'normal',
                     }}
                   >
@@ -489,20 +625,9 @@ export default function Home() {
               </div>
             )}
 
-            {/* Chat message with file upload progress - show when files are uploaded */}
+            {/* File upload progress - sticky component that always stays visible when files are uploaded */}
             {hasUploadedFiles && uploadFiles.length > 0 && (
-              <div className="flex items-start gap-4 mb-8 w-full">
-                <img
-                  src="/mesh.jpg"
-                  alt="User"
-                  className="shrink-0 opacity-100 rounded-full"
-                  style={{
-                    width: '51.04205703735356px',
-                    height: '51.04205703735356px',
-                    transform: 'rotate(90deg)',
-                    boxShadow: '0px 0px 28.36px 0px #A3BDCE80',
-                  }}
-                />
+              <div className="sticky top-0 z-10 flex items-start gap-4 mb-8 w-full bg-[#1b1b1b] pb-4">
                 <div className="flex flex-col gap-3 flex-1">
                   <div
                     className="p-4 opacity-100 min-h-[149px]"
@@ -523,6 +648,108 @@ export default function Home() {
                 </div>
               </div>
             )}
+
+            {/* Chat Messages */}
+            {chatMessages.length > 0 && (
+              <div className="flex flex-col gap-4 mb-8 w-full">
+                {chatMessages.map((msg, index) => (
+                  <div
+                    key={index}
+                    className={`flex items-start gap-4 w-full ${
+                      msg.role === 'user' ? 'justify-end' : 'justify-start'
+                    }`}
+                  >
+                    {msg.role === 'bot' && (
+                      <img
+                        src="/mesh.jpg"
+                        alt="AI Agent"
+                        className="shrink-0 opacity-100 rounded-[25.52px]"
+                        style={{
+                          width: '51.04205703735356px',
+                          height: '51.04205703735356px',
+                          transform: 'rotate(90deg)',
+                          boxShadow: '0px 0px 28.36px 0px #A3BDCE80',
+                        }}
+                      />
+                    )}
+                    <div
+                      className={`p-4 opacity-100 ${
+                        msg.role === 'user'
+                          ? 'bg-[rgba(88,132,206,0.2)]'
+                          : 'bg-[#1B1B1B]'
+                      }`}
+                      style={{
+                        ...(msg.role === 'user' ? {
+                          maxWidth: '760px',
+                          minWidth: 'fit-content',
+                          opacity: 1,
+                          borderTopLeftRadius: '30px',
+                          borderTopRightRadius: '0px',
+                          borderBottomRightRadius: '30px',
+                          borderBottomLeftRadius: '30px',
+                          background: 'linear-gradient(90deg, rgba(88, 132, 206, 0.2) 0%, rgba(227, 196, 193, 0.2) 50%, rgba(225, 231, 203, 0.2) 75%, rgba(177, 162, 195, 0.2) 100%)',
+                        } : {
+                          maxWidth: '760px',
+                          borderTopLeftRadius: '30px',
+                          borderTopRightRadius: '30px',
+                          borderBottomRightRadius: '30px',
+                          borderBottomLeftRadius: '30px',
+                          background: '#1B1B1B',
+                        }),
+                      }}
+                    >
+                      <p
+                        className="text-white font-normal text-sm tracking-normal whitespace-pre-line break-words"
+                        style={{
+                          fontFamily: 'var(--font-poppins), Poppins, sans-serif',
+                          fontStyle: 'normal',
+                          wordWrap: 'break-word',
+                          overflowWrap: 'break-word',
+                        }}
+                      >
+                        {msg.content}
+                      </p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Loading indicator - show when waiting for response */}
+            {isLoadingResponse && chatMessages.length > 0 && (
+              <div className="flex items-start gap-4 mb-8 w-full">
+                <img
+                  src="/mesh.jpg"
+                  alt="AI Agent"
+                  className="shrink-0 opacity-100 rounded-[25.52px]"
+                  style={{
+                    width: '51.04205703735356px',
+                    height: '51.04205703735356px',
+                    transform: 'rotate(90deg)',
+                    boxShadow: '0px 0px 28.36px 0px #A3BDCE80',
+                  }}
+                />
+                <div
+                  className="p-4 opacity-100"
+                  style={{
+                    background: '#1B1B1B',
+                    borderTopLeftRadius: '30px',
+                    borderBottomRightRadius: '30px',
+                    borderBottomLeftRadius: '30px',
+                  }}
+                >
+                  <p
+                    className="text-white font-normal text-sm tracking-normal"
+                    style={{
+                      fontFamily: 'var(--font-poppins), Poppins, sans-serif',
+                      fontStyle: 'normal',
+                    }}
+                  >
+                    Thinking...
+                  </p>
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Show selected files indicator */}
@@ -531,7 +758,7 @@ export default function Home() {
               <p
                 className="text-white font-normal text-sm tracking-normal mb-2"
                 style={{
-                  fontFamily: 'Poppins, sans-serif',
+                  fontFamily: 'var(--font-poppins), Poppins, sans-serif',
                   fontStyle: 'normal',
                 }}
               >
@@ -565,7 +792,7 @@ export default function Home() {
                 <span
                   className="opacity-100 text-white font-medium text-[11px] leading-none tracking-normal"
                   style={{
-                    fontFamily: 'Poppins, sans-serif',
+                    fontFamily: 'var(--font-poppins), Poppins, sans-serif',
                     fontStyle: 'normal',
                   }}
                 >
@@ -618,7 +845,7 @@ export default function Home() {
                   <span
                     className="opacity-100 flex items-center gap-2 font-medium text-[11px] leading-none tracking-normal"
                     style={{
-                      fontFamily: 'Poppins, sans-serif',
+                      fontFamily: 'var(--font-poppins), Poppins, sans-serif',
                       fontStyle: 'normal',
                     }}
                   >
