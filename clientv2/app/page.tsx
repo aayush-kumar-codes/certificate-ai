@@ -681,9 +681,12 @@ export default function Home() {
                 {chatMessages.map((msg, index) => (
                   <div
                     key={index}
-                    className={`flex items-start gap-4 w-full ${
+                    className={`flex items-start w-full ${
                       msg.role === 'user' ? 'justify-end' : 'justify-start'
                     }`}
+                    style={{
+                      gap: msg.role === 'bot' ? '16px' : '0px',
+                    }}
                   >
                     {msg.role === 'bot' && (
                       <img
@@ -698,9 +701,9 @@ export default function Home() {
                       />
                     )}
                     <div
-                      className={`p-4 opacity-100 ${
+                      className={`opacity-100 ${
                         msg.role === 'user'
-                          ? 'bg-[rgba(88,132,206,0.2)]'
+                          ? ''
                           : 'bg-[#1B1B1B]'
                       }`}
                       style={{
@@ -709,22 +712,25 @@ export default function Home() {
                           minWidth: 'fit-content',
                           opacity: 1,
                           borderTopLeftRadius: '30px',
-                          borderTopRightRadius: '0px',
-                          borderBottomRightRadius: '30px',
+                          borderTopRightRadius: '30px',
                           borderBottomLeftRadius: '30px',
+                          borderBottomRightRadius: '0px',
                           background: 'linear-gradient(90deg, rgba(88, 132, 206, 0.2) 0%, rgba(227, 196, 193, 0.2) 50%, rgba(225, 231, 203, 0.2) 75%, rgba(177, 162, 195, 0.2) 100%)',
+                          padding: '12px 16px',
+                          marginLeft: 'auto',
                         } : {
                           maxWidth: '760px',
+                          padding: '16px',
                           borderTopLeftRadius: '30px',
                           borderTopRightRadius: '30px',
-                          borderBottomRightRadius: '30px',
                           borderBottomLeftRadius: '30px',
+                          borderBottomRightRadius: '0px',
                           background: '#1B1B1B',
                         }),
                       }}
                     >
                       <p
-                        className="text-white font-normal text-sm tracking-normal whitespace-pre-line break-words"
+                        className="font-normal text-sm tracking-normal whitespace-pre-line break-words text-white"
                         style={{
                           fontFamily: 'var(--font-poppins), Poppins, sans-serif',
                           fontStyle: 'normal',
@@ -735,6 +741,9 @@ export default function Home() {
                         {msg.content}
                       </p>
                     </div>
+                    {msg.role === 'user' && (
+                      <div style={{ width: '51.04205703735356px', flexShrink: 0 }} />
+                    )}
                   </div>
                 ))}
               </div>

@@ -45,6 +45,7 @@ export function FileUploadProgress({ files, onCancel, onRemove }: FileUploadProg
         className="flex items-center gap-3 flex-wrap"
         style={{
           paddingTop: '60px', // 24px (top) + 21px (text height) + 15px (spacing)
+          paddingLeft: '28px', // Match the header text left positioning
         }}
       >
         {files.map((fileItem) => (
