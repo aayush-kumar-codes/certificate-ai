@@ -6,6 +6,14 @@ import { createCertificateValidationAgent } from "../agents/certificateAgent.js"
 import { randomUUID } from "crypto";
 import { addDocument, getDocumentCount, getDocumentsBySession, getNextDocumentIndex } from "../utils/documentRegistry.js";
 import { getDocumentCountBySession } from "../utils/documentQuery.js";
+import { 
+  initializeProgress, 
+  updateFileProgress, 
+  setCurrentFile, 
+  completeUpload, 
+  setUploadError,
+  uploadProgress
+} from "../utils/uploadProgress.js";
 
 function getFinalOutput(result) {
   if (!result) {
@@ -124,6 +132,9 @@ function getFinalOutput(result) {
 }
 
 export async function uploadPdf(req, res) {
+  // Generate upload ID for progress tracking
+  const uploadId = randomUUID();
+  
   try {
     // Handle both single file (req.file) and multiple files (req.files)
     const files = req.files || (req.file ? [req.file] : []);
@@ -136,6 +147,16 @@ export async function uploadPdf(req, res) {
     const sessionId = req.body.sessionId;
     const { sessionId: currentSessionId, session } = getOrCreateSession(sessionId);
 
+    // Initialize progress tracking
+    initializeProgress(uploadId, files.length);
+
+    // Return upload ID immediately so frontend can start polling
+    res.status(202).json({ 
+      uploadId,
+      message: "Upload started",
+      totalFiles: files.length
+    });
+
     const uploadedDocuments = [];
     const errors = [];
 
@@ -146,8 +167,13 @@ export async function uploadPdf(req, res) {
       const mimetype = file.mimetype || "";
       const fileName = file.originalname || file.filename || `file-${i + 1}`;
 
+      // Update current file being processed
+      setCurrentFile(uploadId, i);
+      updateFileProgress(uploadId, fileName, 10, 'uploading');
+
       // Validate file type
       if (mimetype !== "application/pdf" && !mimetype.startsWith("image/")) {
+        updateFileProgress(uploadId, fileName, 0, 'error');
         errors.push({
           fileName,
           error: "Unsupported file type. Please upload a PDF or image file."
@@ -156,6 +182,8 @@ export async function uploadPdf(req, res) {
       }
 
       try {
+        updateFileProgress(uploadId, fileName, 30, 'processing');
+
         // Generate unique document ID
         const documentId = randomUUID();
         
@@ -170,12 +198,16 @@ export async function uploadPdf(req, res) {
           documentName: fileName,
         };
 
+        updateFileProgress(uploadId, fileName, 50, 'processing');
+
         // Process and embed based on file type
         if (mimetype === "application/pdf") {
           await embedPdfToPinecone(filePath, metadata);
         } else if (mimetype.startsWith("image/")) {
           await embedImageToPinecone(filePath, metadata);
         }
+
+        updateFileProgress(uploadId, fileName, 80, 'processing');
 
         // Register document in registry
         const documentInfo = addDocument(
@@ -191,9 +223,11 @@ export async function uploadPdf(req, res) {
           documentIndex,
         });
 
+        updateFileProgress(uploadId, fileName, 100, 'completed');
         console.log(`✅ Successfully processed file ${i + 1}/${files.length}: ${fileName}`);
       } catch (fileError) {
         console.error(`❌ Error processing file ${fileName}:`, fileError);
+        updateFileProgress(uploadId, fileName, 0, 'error');
         errors.push({
           fileName,
           error: fileError.message || "Failed to process file"
@@ -201,12 +235,10 @@ export async function uploadPdf(req, res) {
       }
     }
 
-    // If no files were successfully processed, return error
+    // If no files were successfully processed, mark as error
     if (uploadedDocuments.length === 0) {
-      return res.status(400).json({
-        error: "Failed to process any files",
-        errors: errors
-      });
+      setUploadError(uploadId, "Failed to process any files");
+      return;
     }
 
     // Verify document count from Pinecone (with retry for eventual consistency)
@@ -250,7 +282,8 @@ export async function uploadPdf(req, res) {
     // Get all documents for this session
     const allDocuments = getDocumentsBySession(currentSessionId);
 
-    return res.json({
+    // Store final result in progress for frontend to retrieve
+    const finalResult = {
       message: agentMessage || `Document${documentCount > 1 ? 's' : ''} uploaded successfully. How would you like to validate your certificate${documentCount > 1 ? 's' : ''} based on which criteria?`,
       sessionId: currentSessionId,
       documentCount: documentCount,
@@ -261,9 +294,23 @@ export async function uploadPdf(req, res) {
         documentIndex: doc.documentIndex
       })),
       errors: errors.length > 0 ? errors : undefined
-    });
+    };
+
+    // Store final result and mark as completed
+    const upload = uploadProgress.get(uploadId);
+    if (upload) {
+      upload.finalResult = finalResult;
+      completeUpload(uploadId);
+    }
   } catch (err) {
     console.error("Upload error:", err);
-    res.status(500).json({ error: "Failed to process files", details: err.message });
+    // Make sure error is stored in progress tracker
+    // Note: Response already sent, so we can't send another response
+    // Frontend will poll and get the error status
+    try {
+      setUploadError(uploadId, err.message || "Failed to process files");
+    } catch (progressError) {
+      console.error("Failed to set upload error in progress tracker:", progressError);
+    }
   }
 }
