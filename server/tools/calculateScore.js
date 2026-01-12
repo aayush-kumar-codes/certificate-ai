@@ -1,6 +1,7 @@
 import { tool } from "@openai/agents";
 import { z } from "zod";
 import { getCriteria, getCriteriaById } from "../services/criteriaService.js";
+import { saveEvaluation } from "../services/evaluationService.js";
 
 /**
  * Create a calculate score tool with sessionId injected from context
@@ -16,13 +17,19 @@ export function createCalculateScoreTool(sessionId) {
         "Evaluation results as JSON string from evaluate_certificate tool. Must contain 'checks' array with 'criterion', 'passed', and 'weight' fields."
       ),
       criteriaId: z.string().nullable().optional().describe(
-        "Optional criteria ID to retrieve weights and threshold. If not provided, weights should be in evaluationResults."
+        "Optional criteria ID to retrieve weights and threshold. If not provided, weights should be in evaluationResults. If provided, evaluation will be saved to database."
+      ),
+      documentId: z.string().nullable().optional().describe(
+        "Optional document ID. If not provided, will try to extract from evaluationResults.documents. Used for saving evaluation."
       ),
       threshold: z.number().nullable().optional().describe(
         "Optional pass/fail threshold (0-100). Defaults to 70 if not provided and not found in criteria."
       ),
+      saveToDatabase: z.boolean().nullable().optional().default(true).describe(
+        "Whether to save the evaluation to database. Defaults to true if criteriaId is provided."
+      ),
     }),
-    execute: async ({ evaluationResults, criteriaId, threshold }) => {
+    execute: async ({ evaluationResults, criteriaId, documentId, threshold, saveToDatabase = true }) => {
       try {
         // Parse evaluation results
         let results;
@@ -136,6 +143,34 @@ ${passedCount} of ${totalCount} criteria passed
 ${finalPassed ? "✅ Certificate PASSED" : "❌ Certificate FAILED"}
 ${!allRequiredPassed ? "Note: Some required criteria failed." : ""}`;
 
+        // Extract documentId from evaluationResults if not provided
+        let finalDocumentId = documentId;
+        if (!finalDocumentId && results.documents && Array.isArray(results.documents) && results.documents.length > 0) {
+          // Get the first document ID from the documents array
+          // documents array structure: [{ documentId, documentName, documentIndex, chunks: [...] }]
+          finalDocumentId = results.documents[0]?.documentId || null;
+        }
+
+        // Save evaluation to database if criteriaId is provided and saveToDatabase is true
+        let savedEvaluationId = null;
+        if (criteriaId && saveToDatabase) {
+          try {
+            const savedEvaluation = await saveEvaluation(
+              sessionId,
+              criteriaId,
+              finalDocumentId,
+              results, // Full evaluation result with checks, evidence, etc.
+              Math.round(overallScore * 100) / 100,
+              finalPassed
+            );
+            savedEvaluationId = savedEvaluation.id;
+            console.log(`✅ Evaluation saved with ID: ${savedEvaluationId}`);
+          } catch (saveError) {
+            console.error("Error saving evaluation:", saveError);
+            // Don't fail the entire operation if saving fails
+          }
+        }
+
         return JSON.stringify({
           success: true,
           overallScore: Math.round(overallScore * 100) / 100, // Round to 2 decimal places
@@ -150,6 +185,7 @@ ${!allRequiredPassed ? "Note: Some required criteria failed." : ""}`;
             weightedScore: weightedScore,
           },
           message: message,
+          evaluationId: savedEvaluationId, // Include saved evaluation ID if saved
         });
       } catch (error) {
         console.error("Error in calculate_score tool:", error);

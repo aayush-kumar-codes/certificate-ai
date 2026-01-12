@@ -30,6 +30,7 @@ model Conversation {
   messages           Message[]
   feedback           Feedback?
   evaluationCriteria EvaluationCriteria[]
+  evaluations        Evaluation[]
 
   @@index([sessionId])
   @@map("conversations")
@@ -76,15 +77,35 @@ model Feedback {
 }
 
 model EvaluationCriteria {
-  id          String      @id @default(uuid())
+  id          String       @id @default(uuid())
   sessionId   String
-  criteria    Json        // Flexible JSON structure for criteria with weights: { "criterionName": { "weight": 0.3, "required": true, "value": "..." } }
-  description String?     // Natural language description
-  threshold   Float?      @default(70) // Pass/fail threshold (0-100), defaults to 70
-  createdAt   DateTime    @default(now())
-  updatedAt   DateTime    @updatedAt
+  criteria    Json         // Flexible JSON structure for criteria with weights: { "criterionName": { "weight": 0.3, "required": true, "value": "..." } }
+  description String?      // Natural language description
+  threshold   Float?       @default(70) // Pass/fail threshold (0-100), defaults to 70
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
   conversation Conversation @relation(fields: [sessionId], references: [sessionId], onDelete: Cascade)
+  evaluations Evaluation[]
 
   @@index([sessionId])
   @@map("evaluation_criteria")
+}
+
+model Evaluation {
+  id          String             @id @default(uuid())
+  sessionId   String
+  criteriaId  String
+  documentId  String?
+  passed      Boolean
+  score       Float?
+  result      Json                // Full validation result with checks, evidence, etc.
+  createdAt   DateTime           @default(now())
+  conversation Conversation       @relation(fields: [sessionId], references: [sessionId], onDelete: Cascade)
+  criteria    EvaluationCriteria @relation(fields: [criteriaId], references: [id], onDelete: Cascade)
+
+  @@index([sessionId])
+  @@index([criteriaId])
+  @@index([documentId])
+  @@index([createdAt])
+  @@map("evaluations")
 }
