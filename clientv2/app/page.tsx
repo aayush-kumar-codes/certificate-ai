@@ -119,8 +119,8 @@ export default function Home() {
       status: 'uploading',
     }))
 
-    // Set upload files immediately to show the progress component
-    setUploadFiles(newFileItems)
+    // Set upload files immediately to show the progress component - append to existing files
+    setUploadFiles(prev => [...prev, ...newFileItems])
     setHasUploadedFiles(true) // Hide upload zone and show chat interface
     setIsLoadingResponse(false) // Reset loading state
     setUploadResponseMessage(null) // Clear previous upload response message
