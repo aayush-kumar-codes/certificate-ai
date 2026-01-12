@@ -323,6 +323,43 @@ function getFinalOutput(result) {
           }
         );
       }
+
+      if (decision === "AGENT_INFO") {
+        // Route agent self-awareness questions to appropriate agent based on context
+        // If documents exist, user might be asking about certificate validation capabilities
+        // Otherwise, route to general agent
+        if (documentsExist) {
+          console.log("✅ Routing agent info question to CertificateValidationAgent (documents exist)");
+          const agent = createCertificateValidationAgent(currentSessionId);
+          return await streamAgentResponse(
+            res,
+            agent,
+            question,
+            session,
+            {
+              currentSessionId,
+              isNew,
+              decision,
+              agentType: "CertificateValidationAgent",
+              documentsExist
+            }
+          );
+        } else {
+          console.log("✅ Routing agent info question to GeneralKnowledgeAgent");
+          return await streamAgentResponse(
+            res,
+            GeneralKnowledgeAgent,
+            question,
+            session,
+            {
+              currentSessionId,
+              isNew,
+              decision,
+              agentType: "GeneralKnowledgeAgent"
+            }
+          );
+        }
+      }
   
       if (decision === "CERTIFICATE") {
         // Handle upload-related queries even if no documents exist yet
