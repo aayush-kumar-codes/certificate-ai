@@ -1,4 +1,4 @@
-import { tool } from "@openai/agents";
+import { tool } from "@langchain/core/tools";
 import { z } from "zod";
 import {
   storeCriteria,
@@ -14,29 +14,8 @@ import {
  * This factory function allows us to inject sessionId without making it a tool parameter
  */
 export function createManageCriteriaTool(sessionId) {
-  return tool({
-    name: "manage_criteria",
-    description:
-      "Store, retrieve, update, or delete evaluation criteria for certificate validation. Supports weighted criteria with pass/fail thresholds. Use this tool when the user specifies validation criteria, wants to modify existing criteria (including weights), or needs to retrieve stored criteria.",
-    parameters: z.object({
-      action: z.enum(["store", "retrieve", "update", "delete", "list"], {
-        description:
-          "Action to perform: 'store' to save new criteria, 'retrieve' to get latest criteria, 'update' to modify existing criteria, 'delete' to remove criteria, 'list' to get all criteria versions",
-      }),
-      criteria: z.string().nullable().optional().describe(
-        "Criteria object as JSON string (required for 'store' and 'update' actions). Structure with weights: '{\"criterionName\": {\"weight\": 0.3, \"required\": true, \"value\": \"...\"}, ...}'. Weights should sum to ≤ 1.0. Example: {\"expiryDate\": {\"weight\": 0.4, \"required\": true, \"value\": \"2025-12-31\"}, \"agencyName\": {\"weight\": 0.3, \"required\": true, \"value\": \"ABC Agency\"}}"
-      ),
-      description: z.string().nullable().optional().describe(
-        "Natural language description of the criteria (optional, useful for 'store' and 'update' actions)"
-      ),
-      threshold: z.number().nullable().optional().describe(
-        "Pass/fail threshold (0-100) for scoring. Defaults to 70 if not provided. Used with calculate_score tool."
-      ),
-      criteriaId: z.string().nullable().optional().describe(
-        "ID of the criteria to update or delete (required for 'update' and 'delete' actions)"
-      ),
-    }),
-    execute: async ({ action, criteria, description, threshold, criteriaId }) => {
+  return tool(
+    async ({ action, criteria, description, threshold, criteriaId }) => {
       try {
         switch (action) {
           case "store":
@@ -174,5 +153,28 @@ export function createManageCriteriaTool(sessionId) {
         });
       }
     },
-  });
+    {
+      name: "manage_criteria",
+      description:
+        "Store, retrieve, update, or delete evaluation criteria for certificate validation. Supports weighted criteria with pass/fail thresholds. Use this tool when the user specifies validation criteria, wants to modify existing criteria (including weights), or needs to retrieve stored criteria.",
+      schema: z.object({
+        action: z.enum(["store", "retrieve", "update", "delete", "list"], {
+          description:
+            "Action to perform: 'store' to save new criteria, 'retrieve' to get latest criteria, 'update' to modify existing criteria, 'delete' to remove criteria, 'list' to get all criteria versions",
+        }),
+        criteria: z.string().nullable().optional().describe(
+          "Criteria object as JSON string (required for 'store' and 'update' actions). Structure with weights: '{\"criterionName\": {\"weight\": 0.3, \"required\": true, \"value\": \"...\"}, ...}'. Weights should sum to ≤ 1.0. Example: {\"expiryDate\": {\"weight\": 0.4, \"required\": true, \"value\": \"2025-12-31\"}, \"agencyName\": {\"weight\": 0.3, \"required\": true, \"value\": \"ABC Agency\"}}"
+        ),
+        description: z.string().nullable().optional().describe(
+          "Natural language description of the criteria (optional, useful for 'store' and 'update' actions)"
+        ),
+        threshold: z.number().nullable().optional().describe(
+          "Pass/fail threshold (0-100) for scoring. Defaults to 70 if not provided. Used with calculate_score tool."
+        ),
+        criteriaId: z.string().nullable().optional().describe(
+          "ID of the criteria to update or delete (required for 'update' and 'delete' actions)"
+        ),
+      })
+    }
+  );
 }

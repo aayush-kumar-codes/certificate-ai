@@ -1,4 +1,4 @@
-import { tool } from "@openai/agents";
+import { tool } from "@langchain/core/tools";
 import { z } from "zod";
 
 /**
@@ -63,11 +63,8 @@ const AGENT_INFO_DATA = {
  * This factory function allows us to inject agentType without making it a tool parameter
  */
 export function createAgentInfoTool(agentType, sessionId) {
-  return tool({
-    name: "agent_info",
-    description: "Get detailed information about this agent's capabilities, tools, use cases, and limitations. Use this tool when users ask detailed questions about what the agent can do, how it works, or what its capabilities are.",
-    parameters: z.object({}),
-    execute: async () => {
+  return tool(
+    async () => {
       try {
         const agentData = AGENT_INFO_DATA[agentType];
         
@@ -96,5 +93,10 @@ export function createAgentInfoTool(agentType, sessionId) {
         });
       }
     },
-  });
+    {
+      name: "agent_info",
+      description: "Get detailed information about this agent's capabilities, tools, use cases, and limitations. Use this tool when users ask detailed questions about what the agent can do, how it works, or what its capabilities are.",
+      schema: z.object({})
+    }
+  );
 }

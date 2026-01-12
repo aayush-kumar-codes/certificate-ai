@@ -1,504 +1,119 @@
-import { run } from "@openai/agents";
-import { RouterAgent } from "../agents/routerAgent.js";
-import { GeneralKnowledgeAgent } from "../agents/generalAgent.js";
-import { createCertificateValidationAgent } from "../agents/certificateAgent.js";
+import { createAgentGraph } from "../agents/agentGraph.js";
 import { hasDocumentsForSession } from "../utils/documentQuery.js";
 import { getOrCreateSession } from "../utils/sessionManager.js";
 import { saveConversationMessage } from "../services/conversationService.js";
+import { HumanMessage, AIMessage } from "@langchain/core/messages";
 
-/**
- * Helper function to stream agent response using SSE format
- */
-async function streamAgentResponse(res, agent, question, session, options = {}) {
-  const {
-    currentSessionId,
-    isNew,
-    decision,
-    agentType,
-    documentsExist,
-    metadata = {}
-  } = options;
+export async function chat(req, res) {
+  const { question, sessionId } = req.body;
 
   try {
-    // Set SSE headers
-    res.setHeader('Content-Type', 'text/event-stream');
-    res.setHeader('Cache-Control', 'no-cache');
-    res.setHeader('Connection', 'keep-alive');
-    res.setHeader('X-Accel-Buffering', 'no'); // Disable nginx buffering
-
-    // Run agent with streaming enabled
-    const result = await run(agent, question, { session, stream: true });
+    // Get or create session for conversation memory
+    const { sessionId: currentSessionId, threadId, checkpointer, isNew } = getOrCreateSession(sessionId);
+    console.log("🔗 Session ID:", currentSessionId);
+    console.log(`💾 Memory Status: ${isNew ? 'NEW session - starting fresh conversation' : 'EXISTING session - conversation history preserved'}`);
     
-    let fullResponse = '';
-    let streamErrorOccurred = false;
-    
+    // Save user message to database
     try {
-      // Stream text chunks as they arrive
-      for await (const chunk of result.toTextStream()) {
-        if (res.destroyed || res.closed) {
-          console.warn("⚠️ Response stream closed by client");
-          break;
-        }
-        fullResponse += chunk;
-        // Send chunk to client in SSE format
-        try {
-          res.write(`data: ${JSON.stringify({ type: 'chunk', text: chunk })}\n\n`);
-        } catch (writeError) {
-          console.error("❌ Error writing chunk:", writeError);
-          streamErrorOccurred = true;
-          break;
-        }
-      }
-
-      // Wait for streaming to complete (if not already errored)
-      if (!streamErrorOccurred) {
-        await result.completed;
-      }
-    } catch (streamError) {
-      console.error("❌ Error during streaming:", streamError);
-      streamErrorOccurred = true;
-      // Try to send error event if stream is still open
-      if (!res.destroyed && !res.closed) {
-        try {
-          res.write(`data: ${JSON.stringify({
-            type: 'error',
-            error: 'Streaming failed',
-            message: streamError.message || 'Unknown streaming error'
-          })}\n\n`);
-        } catch (writeError) {
-          console.error("❌ Failed to write error event:", writeError);
-        }
-      }
-      res.end();
-      return;
-    }
-
-    // Only proceed if streaming completed successfully
-    if (!streamErrorOccurred && !res.destroyed && !res.closed) {
-      console.log(`✅ Memory: Conversation stored in MemorySession (${currentSessionId.substring(0, 8)}...)`);
-
-      // Save bot response to database
-      let messageId = null;
-      try {
-        const savedMessage = await saveConversationMessage({
-          sessionId: currentSessionId,
-          role: "ASSISTANT",
-          content: fullResponse.trim(),
-          routerDecision: decision,
-          agentType: agentType,
-          metadata: {
-            isNewSession: isNew,
-            memoryActive: true,
-            documentsExist,
-            ...metadata,
-          },
-        });
-        messageId = savedMessage.id;
-      } catch (logError) {
-        console.error("⚠️ Failed to log bot response:", logError);
-        // Continue execution even if logging fails
-      }
-
-      // Send final completion event with metadata
-      try {
-        res.write(`data: ${JSON.stringify({
-          type: 'done',
-          sessionId: currentSessionId,
-          memoryActive: true,
-          isNewSession: isNew,
-          ...(messageId && { messageId })
-        })}\n\n`);
-        res.end();
-      } catch (writeError) {
-        console.error("❌ Error writing completion event:", writeError);
-        if (!res.destroyed && !res.closed) {
-          res.end();
-        }
-      }
-    }
-  } catch (streamError) {
-    console.error("❌ Streaming error:", streamError);
-    // Send error event to client if stream is still open
-    if (!res.destroyed && !res.closed && !res.headersSent) {
-      try {
-        res.setHeader('Content-Type', 'text/event-stream');
-        res.setHeader('Cache-Control', 'no-cache');
-        res.setHeader('Connection', 'keep-alive');
-        res.write(`data: ${JSON.stringify({
-          type: 'error',
-          error: 'Streaming failed',
-          message: streamError.message || 'Unknown error occurred'
-        })}\n\n`);
-      } catch (writeError) {
-        console.error("❌ Failed to write error event:", writeError);
-      }
-    }
-    if (!res.destroyed && !res.closed) {
-      res.end();
-    }
-  }
-}   
-function getFinalOutput(result) {
-    if (!result) {
-      console.log("⚠️ getFinalOutput: result is null/undefined");
-      return "";
-    }
-
-    // According to OpenAI Agents SDK docs: result.finalOutput is the primary way to get output
-    if (result.finalOutput !== undefined) {
-      if (typeof result.finalOutput === 'string') {
-        return result.finalOutput.trim();
-      }
-      // If finalOutput is an object/array, try to extract text from it
-      if (typeof result.finalOutput === 'object') {
-        // Check if it's an array of content items
-        if (Array.isArray(result.finalOutput)) {
-          for (const item of result.finalOutput) {
-            if (item?.type === "output_text" && item?.text) {
-              return item.text.trim();
-            }
-            if (typeof item === 'string') {
-              return item.trim();
-            }
-          }
-        }
-        // Check if it has a text property
-        if (result.finalOutput.text && typeof result.finalOutput.text === 'string') {
-          return result.finalOutput.text.trim();
-        }
-      }
-    }
-
-    // Handle OpenAI Agents SDK structure: result.state.*
-    if (result.state) {
-      // 1. Check currentStep.output (most direct path) - must be a string
-      if (result.state.currentStep?.output) {
-        const output = result.state.currentStep.output;
-        if (typeof output === 'string') {
-          return output.trim();
-        }
-        // If it's an object, skip and try other paths
-      }
-
-      // 2. Check lastModelResponse.providerData.output_text
-      if (result.state.lastModelResponse?.providerData?.output_text) {
-        const outputText = result.state.lastModelResponse.providerData.output_text;
-        if (typeof outputText === 'string') {
-          return outputText.trim();
-        }
-      }
-
-      // 3. Check lastModelResponse.output[0].content[0].text
-      if (result.state.lastModelResponse?.output?.[0]?.content?.[0]?.text) {
-        const text = result.state.lastModelResponse.output[0].content[0].text;
-        if (typeof text === 'string') {
-          return text.trim();
-        }
-      }
-
-      // 4. Check generatedItems (nested in state)
-      if (Array.isArray(result.state.generatedItems) && result.state.generatedItems.length) {
-        const item = result.state.generatedItems[0];
-        if (item?.rawItem?.content?.[0]?.text) {
-          const text = item.rawItem.content[0].text;
-          if (typeof text === 'string') {
-            return text.trim();
-          }
-        }
-      }
-    }
-
-    // Legacy fallbacks (for other structures)
-    // 1. If final_output property exists
-    if (result.final_output) {
-      return typeof result.final_output === 'string' ? result.final_output.trim() : String(result.final_output).trim();
-    }
-  
-    // 2. If output property exists
-    if (result.output) {
-      return typeof result.output === 'string' ? result.output.trim() : String(result.output).trim();
-    }
-
-    // 3. If messages array exists, get the last assistant message
-    if (Array.isArray(result.messages) && result.messages.length > 0) {
-      const lastMessage = result.messages[result.messages.length - 1];
-      if (lastMessage?.content) {
-        return typeof lastMessage.content === 'string' 
-          ? lastMessage.content.trim() 
-          : String(lastMessage.content).trim();
-      }
-    }
-  
-    // 4. If generated items exist (top level)
-    if (Array.isArray(result.generatedItems) && result.generatedItems.length) {
-      let text = "";
-      for (const item of result.generatedItems) {
-        const content = item.rawItem?.content;
-        if (Array.isArray(content)) {
-          for (const c of content) {
-            if (c.type === "output_text" && c.text) {
-              text += c.text;
-            }
-          }
-        }
-      }
-      if (text.trim()) {
-        return text.trim();
-      }
-    }
-  
-    // 5. Last model response fallback
-    if (result.lastModelResponse?.output_text) {
-      return result.lastModelResponse.output_text.trim();
-    }
-
-    // 6. If result is a string itself
-    if (typeof result === 'string') {
-      return result.trim();
-    }
-  
-    console.log("⚠️ getFinalOutput: Could not extract output from result structure");
-    return "";
-  }
-  
-  export async function chat(req, res) {
-    const { question, sessionId } = req.body;
-  
-    try {
-      // Get or create session for conversation memory
-      const { sessionId: currentSessionId, session, isNew } = getOrCreateSession(sessionId);
-      console.log("🔗 Session ID:", currentSessionId);
-      console.log(`💾 Memory Status: ${isNew ? 'NEW session - starting fresh conversation' : 'EXISTING session - conversation history preserved'}`);
-      
-      // Save user message to database
-      try {
-        await saveConversationMessage({
-          sessionId: currentSessionId,
-          role: "USER",
-          content: question,
-          metadata: {
-            isNewSession: isNew,
-            memoryActive: true,
-          },
-        });
-      } catch (logError) {
-        console.error("⚠️ Failed to log user message:", logError);
-        // Continue execution even if logging fails
-      }
-      
-      // Check if documents exist for this session (before routing)
-      const documentsExist = await hasDocumentsForSession(currentSessionId);
-      console.log("📄 Documents exist in Pinecone for session:", documentsExist);
-      
-      // Run router agent with session for memory (non-streaming for quick decision)
-      const routerResult = await run(RouterAgent, question, { session });
-      
-      // Debug: Check finalOutput (primary method per docs)
-      if (routerResult?.finalOutput !== undefined) {
-        console.log("🔍 finalOutput:", routerResult.finalOutput);
-        console.log("🔍 finalOutput type:", typeof routerResult.finalOutput);
-      }
-      
-      const decision = getFinalOutput(routerResult);
-      console.log("🧭 Router Decision:", decision);
-      
-      if (!decision) {
-        console.error("❌ Router Decision is empty!");
-        console.error("finalOutput:", routerResult?.finalOutput);
-        console.error("currentStep.output:", routerResult?.state?.currentStep?.output);
-      }
-  
-      if (decision === "GENERAL") {
-        // Stream the GeneralKnowledgeAgent response
-        return await streamAgentResponse(
-          res,
-          GeneralKnowledgeAgent,
-          question,
-          session,
-          {
-            currentSessionId,
-            isNew,
-            decision,
-            agentType: "GeneralKnowledgeAgent"
-          }
-        );
-      }
-
-      if (decision === "AGENT_INFO") {
-        // Route agent self-awareness questions to appropriate agent based on context
-        // If documents exist, user might be asking about certificate validation capabilities
-        // Otherwise, route to general agent
-        if (documentsExist) {
-          console.log("✅ Routing agent info question to CertificateValidationAgent (documents exist)");
-          const agent = createCertificateValidationAgent(currentSessionId);
-          return await streamAgentResponse(
-            res,
-            agent,
-            question,
-            session,
-            {
-              currentSessionId,
-              isNew,
-              decision,
-              agentType: "CertificateValidationAgent",
-              documentsExist
-            }
-          );
-        } else {
-          console.log("✅ Routing agent info question to GeneralKnowledgeAgent");
-          return await streamAgentResponse(
-            res,
-            GeneralKnowledgeAgent,
-            question,
-            session,
-            {
-              currentSessionId,
-              isNew,
-              decision,
-              agentType: "GeneralKnowledgeAgent"
-            }
-          );
-        }
-      }
-  
-      if (decision === "CERTIFICATE") {
-        // Handle upload-related queries even if no documents exist yet
-        const lowerQuestion = question.toLowerCase().trim();
-        const isUploadRelated = 
-          lowerQuestion.includes("upload") || 
-          lowerQuestion.includes("done") || 
-          lowerQuestion.includes("it's done") ||
-          lowerQuestion.includes("finished");
-        
-        // If user is confirming upload completion, check if documents exist
-        if (isUploadRelated && !documentsExist) {
-          // User might be confirming upload, but documents not indexed yet
-          // Wait a moment and check again
-          await new Promise(resolve => setTimeout(resolve, 2000));
-          const documentsExistAfterWait = await hasDocumentsForSession(currentSessionId);
-          
-          if (!documentsExistAfterWait) {
-            console.log("⚠️ Upload confirmation detected but documents not found after wait");
-            const uploadWaitAnswer = "I'm waiting for your document upload. Please upload your certificate document first, then let me know when you're done.";
-            
-            // Save bot response to database
-            let messageId = null;
-            try {
-              const savedMessage = await saveConversationMessage({
-                sessionId: currentSessionId,
-                role: "ASSISTANT",
-                content: uploadWaitAnswer,
-                routerDecision: decision,
-                agentType: "CertificateValidationAgent",
-                metadata: {
-                  isNewSession: isNew,
-                  memoryActive: true,
-                  waitingForUpload: true,
-                },
-              });
-              messageId = savedMessage.id;
-            } catch (logError) {
-              console.error("⚠️ Failed to log bot response:", logError);
-            }
-            
-            return res.json({
-              answer: uploadWaitAnswer,
-              sessionId: currentSessionId,
-              memoryActive: true,
-              isNewSession: isNew,
-              waitingForUpload: true,
-              ...(messageId && { messageId })
-            });
-          }
-        }
-        
-        // If no documents exist and not upload-related, prompt to upload
-        if (!documentsExist && !isUploadRelated) {
-          console.log("⚠️ Certificate question detected but no documents found");
-          const uploadPromptAnswer = "Please upload your certificate document first so I can help you.";
-          
-          // Save bot response to database
-          let messageId = null;
-          try {
-            const savedMessage = await saveConversationMessage({
-              sessionId: currentSessionId,
-              role: "ASSISTANT",
-              content: uploadPromptAnswer,
-              routerDecision: decision,
-              agentType: "CertificateValidationAgent",
-              metadata: {
-                isNewSession: isNew,
-                memoryActive: true,
-              },
-            });
-            messageId = savedMessage.id;
-          } catch (logError) {
-            console.error("⚠️ Failed to log bot response:", logError);
-          }
-          
-          return res.json({
-            answer: uploadPromptAnswer,
-            sessionId: currentSessionId,
-            memoryActive: true,
-            isNewSession: isNew,
-            ...(messageId && { messageId })
-          });
-        }
-        
-        // Documents exist or upload-related query, proceed with certificate validation
-        // Create agent with session-specific tool (includes sessionId filtering)
-        const agent = createCertificateValidationAgent(currentSessionId);
-        console.log("✅ Processing certificate question with memory");
-        
-        // Stream the CertificateValidationAgent response
-        return await streamAgentResponse(
-          res,
-          agent,
-          question,
-          session,
-          {
-            currentSessionId,
-            isNew,
-            decision,
-            agentType: "CertificateValidationAgent",
-            documentsExist
-          }
-        );
-      }
-  
-      // Fallback for unrecognized decisions
-      const fallbackAnswer = "I'm not sure how to handle that request.";
-      
-      // Save bot response to database
-      let messageId = null;
-      try {
-        const savedMessage = await saveConversationMessage({
-          sessionId: currentSessionId,
-          role: "ASSISTANT",
-          content: fallbackAnswer,
-          routerDecision: decision || "UNKNOWN",
-          metadata: {
-            isNewSession: isNew,
-            memoryActive: true,
-          },
-        });
-        messageId = savedMessage.id;
-      } catch (logError) {
-        console.error("⚠️ Failed to log bot response:", logError);
-      }
-      
-      return res.json({ 
-        answer: fallbackAnswer,
+      await saveConversationMessage({
         sessionId: currentSessionId,
-        memoryActive: true,
-        isNewSession: isNew,
-        ...(messageId && { messageId })
+        role: "USER",
+        content: question,
+        metadata: {
+          isNewSession: isNew,
+          memoryActive: true,
+        },
       });
-  
-    } catch (err) {
-      console.error("Chat Error:", err);
-      res.status(500).json({ error: "Chat processing failed" });
+    } catch (logError) {
+      console.error("⚠️ Failed to log user message:", logError);
+      // Continue execution even if logging fails
     }
-  }
-  
+    
+    // Check if documents exist for this session (before routing)
+    const documentsExist = await hasDocumentsForSession(currentSessionId);
+    console.log("📄 Documents exist in Pinecone for session:", documentsExist);
+    
+    // Create the agent graph with session-specific tools
+    const graph = createAgentGraph(currentSessionId);
+    
+    // Compile graph with checkpointer for memory
+    const compiledGraph = graph.compile({
+      checkpointer: checkpointer,
+    });
+    
+    // Create config with threadId for checkpointing
+    const config = {
+      configurable: {
+        thread_id: threadId,
+      },
+    };
+    
+    // Create initial state with new user message
+    // LangGraph's MessagesAnnotation reducer should automatically append this to checkpointed messages
+    const initialState = {
+      messages: [new HumanMessage(question)],
+      sessionId: currentSessionId,
+      routerDecision: null,
+      documentsExist: documentsExist || false,
+    };
+    
+    console.log(`💬 User question: "${question}"`);
+    console.log(`📝 Initial state messages count: ${initialState.messages.length}`);
+    
+    // Invoke the graph - LangGraph will automatically restore checkpointed state and merge
+    const result = await compiledGraph.invoke(initialState, config);
+    
+    // Extract the AI message from the result
+    const messages = result.messages || [];
+    console.log(`📊 Total messages in result: ${messages.length}`);
+    console.log(`📝 Message types: ${messages.map(m => m.constructor.name).join(', ')}`);
+    
+    // Find the LAST AIMessage (not the first!) - reverse the array and find first AIMessage
+    const lastAIMessage = messages.slice().reverse().find(msg => msg instanceof AIMessage);
+    const answer = lastAIMessage?.content 
+      ? (typeof lastAIMessage.content === 'string' 
+          ? lastAIMessage.content 
+          : String(lastAIMessage.content))
+      : "";
+    
+    console.log(`🎯 Extracted answer from ${lastAIMessage ? 'LAST' : 'NO'} AIMessage`);
 
+    console.log(`✅ Memory: Conversation stored in LangGraph checkpoint (${currentSessionId.substring(0, 8)}...)`);
+    console.log(`💬 Answer length: ${answer.length}, Answer preview: ${answer.substring(0, 100)}...`);
+
+    // Save bot response to database
+    let messageId = null;
+    try {
+      const savedMessage = await saveConversationMessage({
+        sessionId: currentSessionId,
+        role: "ASSISTANT",
+        content: answer.trim(),
+        routerDecision: result.routerDecision || null,
+        agentType: result.agentType || null,
+        metadata: {
+          isNewSession: isNew,
+          memoryActive: true,
+          documentsExist,
+        },
+      });
+      messageId = savedMessage.id;
+    } catch (logError) {
+      console.error("⚠️ Failed to log bot response:", logError);
+      // Continue execution even if logging fails
+    }
+
+    // Return JSON response
+    res.json({
+      answer: answer.trim(),
+      sessionId: currentSessionId,
+      status: "completed",
+      memoryActive: true,
+      isNewSession: isNew,
+      ...(messageId && { messageId }),
+    });
+
+  } catch (err) {
+    console.error("Chat Error:", err);
+    res.status(500).json({ error: "Chat processing failed" });
+  }
+}

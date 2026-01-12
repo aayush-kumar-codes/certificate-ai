@@ -1,9 +1,39 @@
+import { ChatOpenAI } from "@langchain/openai";
+import { z } from "zod";
+import { AgentGraphState } from "./graphState.js";
+import { HumanMessage, SystemMessage } from "@langchain/core/messages";
 
-import { Agent } from "@openai/agents";
+const llm = new ChatOpenAI({
+  modelName: "gpt-4o-mini",
+  openAIApiKey: process.env.OPENAI_API_KEY,
+  temperature: 0,
+});
 
-export const RouterAgent = new Agent({
-  name: "RouterAgent",
-  instructions: `
+// Schema for structured output to use as routing logic
+const routeSchema = z.object({
+  decision: z.enum(["GENERAL", "CERTIFICATE", "AGENT_INFO"]).describe(
+    "The routing decision: GENERAL for normal questions, CERTIFICATE for certificate validation, AGENT_INFO for questions about the agent itself"
+  ),
+});
+
+// Augment the LLM with schema for structured output
+const routerLLM = llm.withStructuredOutput(routeSchema, {
+  name: "router",
+});
+
+/**
+ * Router node: Determines which agent should handle the user query
+ */
+export async function routerNode(state) {
+  const { messages, sessionId, documentsExist } = state;
+  
+  // Get the last user message
+  const lastMessage = messages[messages.length - 1];
+  const userMessage = typeof lastMessage?.content === 'string' 
+    ? lastMessage.content 
+    : String(lastMessage?.content || "");
+  
+  const routerInstructions = `
 You are a router agent that decides which agent should handle the user query.
 
 Agents:
@@ -31,9 +61,33 @@ Your job is to determine the INTENT of the question based on conversation contex
 - If the question is about certificates, validation, expiry, or document analysis, route to CERTIFICATE.
 - Otherwise, route to GENERAL.
 
-You have access to conversation history through MemorySession, so use context to make better routing decisions.
+You have access to conversation history through messages, so use context to make better routing decisions.
 
 Reply with ONLY one word:
 GENERAL, CERTIFICATE, or AGENT_INFO
-`
-});
+`;
+
+  // Build messages array with system prompt and conversation history
+  const messagesForRouter = [
+    new SystemMessage(routerInstructions),
+    ...messages,
+  ];
+
+  console.log(`🔀 Router: Processing ${messages.length} messages`);
+  console.log(`📋 Router messages: ${messages.map(m => `${m.constructor.name}: ${typeof m.content === 'string' ? m.content.substring(0, 60) : '...'}`).join(' | ')}`);
+
+  try {
+    const decision = await routerLLM.invoke(messagesForRouter);
+    console.log(`✅ Router decision: ${decision.decision}`);
+    
+    return {
+      routerDecision: decision.decision,
+    };
+  } catch (error) {
+    console.error("❌ Router error:", error);
+    // Default to GENERAL on error
+    return {
+      routerDecision: "GENERAL",
+    };
+  }
+}

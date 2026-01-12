@@ -9,8 +9,10 @@ import { FileUploadProgress, FileUploadItem } from '@/components/FileUploadProgr
 import { uploadPDFs, UploadResponse, askQuestion, AskResponse } from '@/lib/api'
 
 interface ChatMessage {
+  id: string
   role: 'user' | 'bot'
   content: string
+  timestamp: number
 }
 
 export default function Home() {
@@ -40,7 +42,12 @@ export default function Home() {
             (msg) => msg.role === 'bot' && msg.content === uploadResponseMessage
           )
           if (!alreadyExists) {
-            return [...prev, { role: 'bot', content: uploadResponseMessage }]
+            return [...prev, { 
+              id: `bot-upload-${Date.now()}-${Math.random()}`,
+              role: 'bot', 
+              content: uploadResponseMessage,
+              timestamp: Date.now()
+            }]
           }
           return prev
         })
@@ -197,8 +204,10 @@ export default function Home() {
           setChatMessages((prev) => [
             ...prev,
             {
+              id: `bot-error-${Date.now()}-${Math.random()}`,
               role: 'bot',
               content: `Failed to process ${error.fileName}: ${error.error}`,
+              timestamp: Date.now()
             },
           ])
         })
@@ -283,7 +292,12 @@ export default function Home() {
     if (!message.trim() || isLoadingResponse) return
 
     // Add user message to chat
-    const userMessage: ChatMessage = { role: 'user', content: message }
+    const userMessage: ChatMessage = { 
+      id: `user-${Date.now()}-${Math.random()}`,
+      role: 'user', 
+      content: message,
+      timestamp: Date.now()
+    }
     setChatMessages((prev) => [...prev, userMessage])
     setInputValue('')
     setIsLoadingResponse(true)
@@ -299,69 +313,50 @@ export default function Home() {
     })
 
     try {
-      let accumulatedText = ''
-      let botMessageCreated = false
-
-      await askQuestion(
+      console.log('=== Sending message ===', { message, sessionId })
+      const response = await askQuestion(
         message,
-        sessionId || undefined,
-        undefined,
-        {
-          onChunk: (chunk: string) => {
-            if (!botMessageCreated) {
-              accumulatedText = chunk
-              setChatMessages((prev) => [
-                ...prev,
-                { role: 'bot', content: accumulatedText },
-              ])
-              botMessageCreated = true
-            } else {
-              accumulatedText += chunk
-              setChatMessages((prev) => {
-                const newMessages = [...prev]
-                newMessages[newMessages.length - 1] = {
-                  role: 'bot',
-                  content: accumulatedText,
-                }
-                return newMessages
-              })
-            }
-          },
-          onComplete: (metadata) => {
-            if (metadata.sessionId && !sessionId) {
-              setSessionId(metadata.sessionId)
-            }
-            if (!botMessageCreated && accumulatedText) {
-              setChatMessages((prev) => [
-                ...prev,
-                { role: 'bot', content: accumulatedText },
-              ])
-            }
-            setIsLoadingResponse(false)
-          },
-          onError: (error: string) => {
-            setChatMessages((prev) => {
-              const newMessages = [...prev]
-              if (botMessageCreated) {
-                newMessages[newMessages.length - 1] = {
-                  role: 'bot',
-                  content: `Error: ${error}`,
-                }
-              } else {
-                newMessages.push({ role: 'bot', content: `Error: ${error}` })
-              }
-              return newMessages
-            })
-            setIsLoadingResponse(false)
-          },
-        }
+        sessionId || undefined
       )
+
+      console.log('=== Received response ===', { 
+        answer: response.answer, 
+        sessionId: response.sessionId,
+        answerLength: response.answer?.length 
+      })
+
+      if (response.sessionId && !sessionId) {
+        setSessionId(response.sessionId)
+      }
+
+      const botMessage: ChatMessage = {
+        id: `bot-${Date.now()}-${Math.random()}`,
+        role: 'bot',
+        content: response.answer || '',
+        timestamp: Date.now()
+      }
+
+      console.log('=== Adding bot message to chat ===', { 
+        content: botMessage.content,
+        id: botMessage.id 
+      })
+
+      setChatMessages((prev) => {
+        const updated = [...prev, botMessage]
+        console.log('=== Updated chat messages ===', updated.map(m => ({ id: m.id, role: m.role, content: m.content.substring(0, 50) })))
+        return updated
+      })
+      setIsLoadingResponse(false)
     } catch (error) {
+      console.error('=== Error sending message ===', error)
       const errorMessage = error instanceof Error ? error.message : 'Failed to send message'
-      setChatMessages((prev) => [
-        ...prev,
-        { role: 'bot', content: `Error: ${errorMessage}` },
-      ])
+      const errorBotMessage: ChatMessage = {
+        id: `bot-error-${Date.now()}-${Math.random()}`,
+        role: 'bot',
+        content: `Error: ${errorMessage}`,
+        timestamp: Date.now()
+      }
+      setChatMessages((prev) => [...prev, errorBotMessage])
       setIsLoadingResponse(false)
     }
   }
@@ -709,9 +704,9 @@ export default function Home() {
                   marginTop: hasUploadedFiles && uploadFiles.length > 0 ? '50px' : undefined
                 }}
               >
-                {chatMessages.map((msg, index) => (
+                {chatMessages.map((msg) => (
                   <div
-                    key={index}
+                    key={msg.id}
                     className={`flex items-start w-full ${
                       msg.role === 'user' ? 'justify-end' : 'justify-start'
                     }`}

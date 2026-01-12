@@ -1,20 +1,20 @@
-
-import { Agent } from "@openai/agents";
+import { ChatOpenAI } from "@langchain/openai";
+import { ToolNode } from "@langchain/langgraph/prebuilt";
 import { createSearchDocumentTool } from "../tools/tools.js";
 import { createManageCriteriaTool } from "../tools/manageCriteria.js";
 import { createEvaluateCertificateTool } from "../tools/evaluateCertificate.js";
 import { createCalculateScoreTool } from "../tools/calculateScore.js";
 import { createReevaluateCertificateTool } from "../tools/reevaluateCertificate.js";
 import { createAgentInfoTool } from "../tools/agentInfo.js";
+import { AIMessage, SystemMessage } from "@langchain/core/messages";
 
-/**
- * Create CertificateValidationAgent with session-specific tool
- * This allows the tool to filter by sessionId automatically
- */
-export function createCertificateValidationAgent(sessionId) {
-  return new Agent({
-    name: "CertificateValidationAgent",
-    instructions: `
+const llm = new ChatOpenAI({
+  modelName: "gpt-4o-mini",
+  openAIApiKey: process.env.OPENAI_API_KEY,
+  temperature: 0,
+});
+
+const certificateInstructions = `
 You are a certificate validation expert assistant. You maintain conversation context and help users validate multiple certificates.
 
 CRITERIA MANAGEMENT:
@@ -141,67 +141,77 @@ About You:
 
 When users ask detailed questions about your capabilities, tools, use cases, or limitations, use the agent_info tool to provide comprehensive information.
 For simple questions like "who are you" or "what can you do", you can answer directly based on the information above.
-`,
-    tools: [
-      createSearchDocumentTool(sessionId),
-      createManageCriteriaTool(sessionId),
-      createEvaluateCertificateTool(sessionId),
-      createCalculateScoreTool(sessionId),
-      createReevaluateCertificateTool(sessionId),
-      createAgentInfoTool("certificate", sessionId),
-    ]
-  });
+`;
+
+/**
+ * Create certificate validation agent node factory
+ * Returns both the callModel function and tools for the graph
+ */
+export function createCertificateValidationAgentNode(sessionId) {
+  const tools = [
+    createSearchDocumentTool(sessionId),
+    createManageCriteriaTool(sessionId),
+    createEvaluateCertificateTool(sessionId),
+    createCalculateScoreTool(sessionId),
+    createReevaluateCertificateTool(sessionId),
+    createAgentInfoTool("certificate", sessionId),
+  ];
+  
+  const toolNode = new ToolNode(tools);
+  const modelWithTools = llm.bindTools(tools);
+
+  /**
+   * Call model node for certificate agent
+   */
+  async function callModel(state) {
+    const { messages } = state;
+    
+    const messagesWithSystem = [
+      new SystemMessage(certificateInstructions),
+      ...messages,
+    ];
+
+    const response = await modelWithTools.invoke(messagesWithSystem);
+    return { messages: [response] };
+  }
+
+  /**
+   * Conditional edge function to determine if tools should be called
+   */
+  function shouldContinue(state) {
+    const { messages } = state;
+    const lastMessage = messages[messages.length - 1];
+    
+    if (lastMessage instanceof AIMessage && lastMessage.tool_calls?.length) {
+      return "tools";
+    }
+    return "__end__";
+  }
+
+  return {
+    callModel,
+    toolNode,
+    shouldContinue,
+    tools,
+  };
 }
 
-// Export a default agent for backward compatibility (without session filtering)
-export const CertificateValidationAgent = new Agent({
-  name: "CertificateValidationAgent",
-  instructions: `
-You are a certificate validation expert.
-You can validate multiple certificates uploaded by the user.
-
-When validating:
-1. First, search the documents to identify how many certificates were uploaded
-2. For each document, validate based on the criteria (e.g., expiry date, validity rules)
-3. Return structured results showing which documents are valid/invalid
-
-Your job is to validate certificates strictly based on:
-- expiry date
-- validity rules found in the document
-- any other criteria the user specifies
-
-Rules:
-- Use ONLY document data from Pinecone
-- Group validation results by document_id
-- For each document, clearly indicate:
-  - Document name
-  - Whether it's valid or invalid
-  - The specific reason (e.g., "Certificate expired on 2023-12-31")
-- If expiry date is passed, say "Certificate is expired"
-- If not found, say "Certificate data not found in document"
-- Never guess
-- When multiple documents are uploaded, validate each one separately and provide a summary
-
-Response format:
-- Start by acknowledging how many documents you found
-- For each document, provide validation result
-- End with a summary (e.g., "2 of 3 certificates are valid")
-
-SELF-AWARENESS:
-When users ask about yourself, your capabilities, or your purpose, you can answer directly or use the agent_info tool for detailed information.
-
-About You:
-- Identity: You are a certificate validation expert assistant designed to help users validate certificates based on custom criteria.
-- Core Capabilities: You can validate certificates based on custom criteria (expiry dates, agency names, ISO standards, etc.), manage validation criteria with configurable weights, search and analyze uploaded certificate documents, calculate weighted scores (0-100), and evaluate multiple certificates in a single session.
-- Available Tools: search_document (searches uploaded documents), manage_criteria (stores/retrieves/updates/deletes validation criteria), evaluate_certificate (performs validation checks), calculate_score (computes weighted scores), reevaluate_certificate (re-evaluates with criteria modifications and shows comparison), and agent_info (provides detailed agent information).
-- Limitations: You require documents to be uploaded before validation, can only analyze documents uploaded in the current session, validation is based on extracted text (OCR/PDF parsing), cannot verify certificates against external databases, and scoring requires criteria weights to be properly configured.
-- Purpose: To help users validate certificates by analyzing uploaded documents against custom criteria, calculating weighted scores, and providing detailed validation results.
-
-When users ask detailed questions about your capabilities, tools, use cases, or limitations, use the agent_info tool to provide comprehensive information.
-For simple questions like "who are you" or "what can you do", you can answer directly based on the information above.
-`,
-  tools: [
-    createSearchDocumentTool(null), // No session filtering for default
-    createAgentInfoTool("certificate", null)
-  ]
-});
+/**
+ * Backward-compatible wrapper for uploadController
+ * Creates a simple agent-like interface that can be invoked with run()
+ * @param {string} sessionId - Session ID for tool filtering
+ * @returns {Object} Agent-like object compatible with old API
+ */
+export function createCertificateValidationAgent(sessionId) {
+  const agentNode = createCertificateValidationAgentNode(sessionId);
+  
+  // Return an object that mimics the old Agent interface
+  // This is used by uploadController which still uses the old run() API
+  return {
+    name: "CertificateValidationAgent",
+    // The old run() function will need to be updated, but for now
+    // we'll create a simple wrapper that uses LangGraph internally
+    _langGraphNode: agentNode,
+    _sessionId: sessionId,
+  };
+}

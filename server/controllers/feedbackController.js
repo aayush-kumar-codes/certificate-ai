@@ -1,8 +1,6 @@
 import { saveFeedback } from "../services/feedbackService.js";
 import { getSession } from "../utils/sessionManager.js";
 import { saveConversationMessage } from "../services/conversationService.js";
-import { run } from "@openai/agents";
-import { RouterAgent } from "../agents/routerAgent.js";
 
 /**
  * Submit feedback for a conversation
@@ -69,6 +67,7 @@ export async function submitFeedback(req, res) {
 
         // Save feedback as a system/user message to the conversation
         // This ensures it's part of the conversation history
+        // The MemorySession will pick up this feedback from conversation history when loaded
         await saveConversationMessage({
           sessionId,
           role: "USER",
@@ -79,19 +78,8 @@ export async function submitFeedback(req, res) {
             feedbackId: feedback.id,
           },
         });
-
-        // Inject feedback into MemorySession by running a simple agent call
-        // This adds the feedback to the session's conversation history
-        // We use RouterAgent with a simple message that includes the feedback
-        // The session will maintain this in its memory
-        try {
-          await run(RouterAgent, feedbackMessage, { session });
-          console.log(`✅ Feedback injected into MemorySession for session: ${sessionId.substring(0, 8)}...`);
-        } catch (memoryError) {
-          // Log error but don't fail the request
-          console.warn("⚠️ Failed to inject feedback into MemorySession:", memoryError.message);
-          // Continue - feedback is saved in database which is the primary storage
-        }
+        
+        console.log(`✅ Feedback saved to conversation history for session: ${sessionId.substring(0, 8)}...`);
       } catch (injectionError) {
         // Log error but don't fail the request
         console.warn("⚠️ Failed to inject feedback into conversation:", injectionError.message);

@@ -1,4 +1,4 @@
-import { tool } from "@openai/agents";
+import { tool } from "@langchain/core/tools";
 import { z } from "zod";
 import { getCriteria, getCriteriaById, updateCriteria } from "../services/criteriaService.js";
 import {
@@ -32,42 +32,8 @@ function deepMerge(target, source) {
  * This tool allows re-evaluating certificates with modified criteria and comparing results
  */
 export function createReevaluateCertificateTool(sessionId) {
-  return tool({
-    name: "reevaluate_certificate",
-    description:
-      "Re-evaluate a certificate with optional criteria modifications. Merges criteria updates with existing criteria, performs new evaluation, and returns a comparison showing what changed. Use this when the user modifies criteria (e.g., 'change weight of X to Y') or requests re-evaluation.",
-    parameters: z.object({
-      criteriaUpdates: z
-        .string()
-        .nullable()
-        .optional()
-        .describe(
-          "Partial criteria object as JSON string for merging with existing criteria. Only include criteria you want to update. Example: '{\"expiryDate\": {\"weight\": 0.5, \"value\": \"2025-12-31\"}}'"
-        ),
-      criteriaId: z
-        .string()
-        .nullable()
-        .optional()
-        .describe(
-          "ID of the criteria to update and use for evaluation. If not provided, uses latest criteria for session."
-        ),
-      documentId: z
-        .string()
-        .nullable()
-        .optional()
-        .describe(
-          "Optional document ID to re-evaluate a specific document. If not provided, evaluates all documents in the session."
-        ),
-      updateCriteria: z
-        .boolean()
-        .nullable()
-        .optional()
-        .default(true)
-        .describe(
-          "Whether to update the stored criteria with the merged criteria. Defaults to true. Set to false to evaluate with merged criteria without saving."
-        ),
-    }),
-    execute: async ({ criteriaUpdates, criteriaId, documentId, updateCriteria = true }) => {
+  return tool(
+    async ({ criteriaUpdates, criteriaId, documentId, updateCriteria = true }) => {
       try {
         // Get existing criteria
         let existingCriteria = null;
@@ -132,7 +98,7 @@ export function createReevaluateCertificateTool(sessionId) {
         const calculateTool = createCalculateScoreTool(sessionId);
 
         // Perform new evaluation
-        const evaluationResultStr = await evaluateTool.execute({
+        const evaluationResultStr = await evaluateTool.invoke({
           criteriaId: updatedCriteriaId,
           criteria: JSON.stringify(mergedCriteria),
           documentId: documentId || null,
@@ -156,7 +122,7 @@ export function createReevaluateCertificateTool(sessionId) {
         }
 
         // Calculate score
-        const scoreResultStr = await calculateTool.execute({
+        const scoreResultStr = await calculateTool.invoke({
           evaluationResults: JSON.stringify(evaluationResult),
           criteriaId: updatedCriteriaId,
         });
@@ -247,5 +213,41 @@ export function createReevaluateCertificateTool(sessionId) {
         });
       }
     },
-  });
+    {
+      name: "reevaluate_certificate",
+      description:
+        "Re-evaluate a certificate with optional criteria modifications. Merges criteria updates with existing criteria, performs new evaluation, and returns a comparison showing what changed. Use this when the user modifies criteria (e.g., 'change weight of X to Y') or requests re-evaluation.",
+      schema: z.object({
+        criteriaUpdates: z
+          .string()
+          .nullable()
+          .optional()
+          .describe(
+            "Partial criteria object as JSON string for merging with existing criteria. Only include criteria you want to update. Example: '{\"expiryDate\": {\"weight\": 0.5, \"value\": \"2025-12-31\"}}'"
+          ),
+        criteriaId: z
+          .string()
+          .nullable()
+          .optional()
+          .describe(
+            "ID of the criteria to update and use for evaluation. If not provided, uses latest criteria for session."
+          ),
+        documentId: z
+          .string()
+          .nullable()
+          .optional()
+          .describe(
+            "Optional document ID to re-evaluate a specific document. If not provided, evaluates all documents in the session."
+          ),
+        updateCriteria: z
+          .boolean()
+          .nullable()
+          .optional()
+          .default(true)
+          .describe(
+            "Whether to update the stored criteria with the merged criteria. Defaults to true. Set to false to evaluate with merged criteria without saving."
+          ),
+      })
+    }
+  );
 }

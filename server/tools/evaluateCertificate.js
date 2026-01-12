@@ -1,4 +1,4 @@
-import { tool } from "@openai/agents";
+import { tool } from "@langchain/core/tools";
 import { z } from "zod";
 import { getCriteria, getCriteriaById } from "../services/criteriaService.js";
 import { searchDocuments } from "./searchDocs.js";
@@ -16,22 +16,8 @@ const llm = new ChatOpenAI({
  * This tool performs validation checks against criteria and returns structured results
  */
 export function createEvaluateCertificateTool(sessionId) {
-  return tool({
-    name: "evaluate_certificate",
-    description:
-      "Evaluate a certificate against stored or provided criteria. This tool searches the certificate documents, performs validation checks for each criterion, and returns structured results with pass/fail status, evidence, and confidence scores. Use this before calculate_score to get evaluation results.",
-    parameters: z.object({
-      criteriaId: z.string().nullable().optional().describe(
-        "ID of the stored criteria to use for evaluation (optional if criteria is provided)"
-      ),
-      criteria: z.string().nullable().optional().describe(
-        "Criteria object as JSON string (optional if criteriaId is provided). Structure: JSON string with weights like '{\"criterionName\": {\"weight\": 0.3, \"required\": true, \"value\": \"...\"}, ...}'"
-      ),
-      documentId: z.string().nullable().optional().describe(
-        "Optional document ID to evaluate a specific document. If not provided, evaluates all documents in the session."
-      ),
-    }),
-    execute: async ({ criteriaId, criteria, documentId }) => {
+  return tool(
+    async ({ criteriaId, criteria, documentId }) => {
       try {
         // Retrieve criteria
         let criteriaObj = null;
@@ -232,5 +218,21 @@ For each criterion, determine if it passes or fails based on the certificate con
         });
       }
     },
-  });
+    {
+      name: "evaluate_certificate",
+      description:
+        "Evaluate a certificate against stored or provided criteria. This tool searches the certificate documents, performs validation checks for each criterion, and returns structured results with pass/fail status, evidence, and confidence scores. Use this before calculate_score to get evaluation results.",
+      schema: z.object({
+        criteriaId: z.string().nullable().optional().describe(
+          "ID of the stored criteria to use for evaluation (optional if criteria is provided)"
+        ),
+        criteria: z.string().nullable().optional().describe(
+          "Criteria object as JSON string (optional if criteriaId is provided). Structure: JSON string with weights like '{\"criterionName\": {\"weight\": 0.3, \"required\": true, \"value\": \"...\"}, ...}'"
+        ),
+        documentId: z.string().nullable().optional().describe(
+          "Optional document ID to evaluate a specific document. If not provided, evaluates all documents in the session."
+        ),
+      })
+    }
+  );
 }

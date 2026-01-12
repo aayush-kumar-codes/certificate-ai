@@ -1,8 +1,8 @@
 import { embedPdfToPinecone } from "../utils/process-pdf.js";
 import { embedImageToPinecone } from "../utils/process-image.js";
 import { getOrCreateSession } from "../utils/sessionManager.js";
-import { run } from "@openai/agents";
-import { createCertificateValidationAgent } from "../agents/certificateAgent.js";
+import { createAgentGraph } from "../agents/agentGraph.js";
+import { HumanMessage, AIMessage } from "@langchain/core/messages";
 import { randomUUID } from "crypto";
 import { addDocument, getDocumentCount, getDocumentsBySession, getNextDocumentIndex } from "../utils/documentRegistry.js";
 import { getDocumentCountBySession } from "../utils/documentQuery.js";
@@ -14,122 +14,6 @@ import {
   setUploadError,
   uploadProgress
 } from "../utils/uploadProgress.js";
-
-function getFinalOutput(result) {
-  if (!result) {
-    console.log("⚠️ getFinalOutput: result is null/undefined");
-    return "";
-  }
-
-  // According to OpenAI Agents SDK docs: result.finalOutput is the primary way to get output
-  if (result.finalOutput !== undefined) {
-    if (typeof result.finalOutput === 'string') {
-      return result.finalOutput.trim();
-    }
-    // If finalOutput is an object/array, try to extract text from it
-    if (typeof result.finalOutput === 'object') {
-      // Check if it's an array of content items
-      if (Array.isArray(result.finalOutput)) {
-        for (const item of result.finalOutput) {
-          if (item?.type === "output_text" && item?.text) {
-            return item.text.trim();
-          }
-          if (typeof item === 'string') {
-            return item.trim();
-          }
-        }
-      }
-      // Check if it has a text property
-      if (result.finalOutput.text && typeof result.finalOutput.text === 'string') {
-        return result.finalOutput.text.trim();
-      }
-    }
-  }
-
-  // Handle OpenAI Agents SDK structure: result.state.*
-  if (result.state) {
-    // 1. Check currentStep.output (most direct path) - must be a string
-    if (result.state.currentStep?.output) {
-      const output = result.state.currentStep.output;
-      if (typeof output === 'string') {
-        return output.trim();
-      }
-    }
-
-    // 2. Check lastModelResponse.providerData.output_text
-    if (result.state.lastModelResponse?.providerData?.output_text) {
-      const outputText = result.state.lastModelResponse.providerData.output_text;
-      if (typeof outputText === 'string') {
-        return outputText.trim();
-      }
-    }
-
-    // 3. Check lastModelResponse.output[0].content[0].text
-    if (result.state.lastModelResponse?.output?.[0]?.content?.[0]?.text) {
-      const text = result.state.lastModelResponse.output[0].content[0].text;
-      if (typeof text === 'string') {
-        return text.trim();
-      }
-    }
-
-    // 4. Check generatedItems (nested in state)
-    if (Array.isArray(result.state.generatedItems) && result.state.generatedItems.length) {
-      const item = result.state.generatedItems[0];
-      if (item?.rawItem?.content?.[0]?.text) {
-        const text = item.rawItem.content[0].text;
-        if (typeof text === 'string') {
-          return text.trim();
-        }
-      }
-    }
-  }
-
-  // Legacy fallbacks
-  if (result.final_output) {
-    return typeof result.final_output === 'string' ? result.final_output.trim() : String(result.final_output).trim();
-  }
-  
-  if (result.output) {
-    return typeof result.output === 'string' ? result.output.trim() : String(result.output).trim();
-  }
-
-  if (Array.isArray(result.messages) && result.messages.length > 0) {
-    const lastMessage = result.messages[result.messages.length - 1];
-    if (lastMessage?.content) {
-      return typeof lastMessage.content === 'string' 
-        ? lastMessage.content.trim() 
-        : String(lastMessage.content).trim();
-    }
-  }
-  
-  if (Array.isArray(result.generatedItems) && result.generatedItems.length) {
-    let text = "";
-    for (const item of result.generatedItems) {
-      const content = item.rawItem?.content;
-      if (Array.isArray(content)) {
-        for (const c of content) {
-          if (c.type === "output_text" && c.text) {
-            text += c.text;
-          }
-        }
-      }
-    }
-    if (text.trim()) {
-      return text.trim();
-    }
-  }
-  
-  if (result.lastModelResponse?.output_text) {
-    return result.lastModelResponse.output_text.trim();
-  }
-
-  if (typeof result === 'string') {
-    return result.trim();
-  }
-  
-  console.log("⚠️ getFinalOutput: Could not extract output from result structure");
-  return "";
-}
 
 export async function uploadPdf(req, res) {
   // Generate upload ID for progress tracking
@@ -256,8 +140,14 @@ export async function uploadPdf(req, res) {
       documentCount = getDocumentCount(currentSessionId);
     }
 
-    // Create agent with session-specific tool (includes sessionId filtering)
-    const agent = createCertificateValidationAgent(currentSessionId);
+    // Get or create session for LangGraph checkpointing
+    const { threadId, checkpointer } = getOrCreateSession(currentSessionId);
+    
+    // Create agent graph with session-specific tools
+    const graph = createAgentGraph(currentSessionId);
+    const compiledGraph = graph.compile({
+      checkpointer: checkpointer,
+    });
     
     // Check if this is a subsequent upload (not the first)
     // Get document count before this upload to determine if it's subsequent
@@ -276,8 +166,28 @@ export async function uploadPdf(req, res) {
       prompt = `A user just uploaded ${documentCountText}. Ask them how they want to validate their certificate(s) based on which criteria.`;
     }
     
-    const agentResult = await run(agent, prompt, { session });
-    const agentMessage = getFinalOutput(agentResult);
+    // Invoke graph with the prompt
+    const config = {
+      configurable: {
+        thread_id: threadId,
+      },
+    };
+    
+    const initialState = {
+      messages: [new HumanMessage(prompt)],
+      sessionId: currentSessionId,
+      routerDecision: null,
+      documentsExist: true, // Documents were just uploaded
+    };
+    
+    const result = await compiledGraph.invoke(initialState, config);
+    
+    // Extract the final AI message from the result
+    const messages = result.messages || [];
+    const lastAIMessage = messages.filter(m => m instanceof AIMessage).pop();
+    const agentMessage = lastAIMessage?.content 
+      ? (typeof lastAIMessage.content === 'string' ? lastAIMessage.content : String(lastAIMessage.content))
+      : '';
 
     // Get all documents for this session
     const allDocuments = getDocumentsBySession(currentSessionId);

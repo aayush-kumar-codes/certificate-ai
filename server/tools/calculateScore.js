@@ -1,4 +1,4 @@
-import { tool } from "@openai/agents";
+import { tool } from "@langchain/core/tools";
 import { z } from "zod";
 import { getCriteria, getCriteriaById } from "../services/criteriaService.js";
 import { saveEvaluation } from "../services/evaluationService.js";
@@ -8,28 +8,8 @@ import { saveEvaluation } from "../services/evaluationService.js";
  * This tool calculates weighted scores from evaluation results
  */
 export function createCalculateScoreTool(sessionId) {
-  return tool({
-    name: "calculate_score",
-    description:
-      "Calculate a weighted score (0-100) from evaluation results. Takes evaluation results with per-criterion pass/fail status and criteria with weights, then computes an overall score. Returns pass/fail based on threshold. Use this after evaluate_certificate to get a numerical score.",
-    parameters: z.object({
-      evaluationResults: z.string().describe(
-        "Evaluation results as JSON string from evaluate_certificate tool. Must contain 'checks' array with 'criterion', 'passed', and 'weight' fields."
-      ),
-      criteriaId: z.string().nullable().optional().describe(
-        "Optional criteria ID to retrieve weights and threshold. If not provided, weights should be in evaluationResults. If provided, evaluation will be saved to database."
-      ),
-      documentId: z.string().nullable().optional().describe(
-        "Optional document ID. If not provided, will try to extract from evaluationResults.documents. Used for saving evaluation."
-      ),
-      threshold: z.number().nullable().optional().describe(
-        "Optional pass/fail threshold (0-100). Defaults to 70 if not provided and not found in criteria."
-      ),
-      saveToDatabase: z.boolean().nullable().optional().default(true).describe(
-        "Whether to save the evaluation to database. Defaults to true if criteriaId is provided."
-      ),
-    }),
-    execute: async ({ evaluationResults, criteriaId, documentId, threshold, saveToDatabase = true }) => {
+  return tool(
+    async ({ evaluationResults, criteriaId, documentId, threshold, saveToDatabase = true }) => {
       try {
         // Parse evaluation results
         let results;
@@ -195,5 +175,27 @@ ${!allRequiredPassed ? "Note: Some required criteria failed." : ""}`;
         });
       }
     },
-  });
+    {
+      name: "calculate_score",
+      description:
+        "Calculate a weighted score (0-100) from evaluation results. Takes evaluation results with per-criterion pass/fail status and criteria with weights, then computes an overall score. Returns pass/fail based on threshold. Use this after evaluate_certificate to get a numerical score.",
+      schema: z.object({
+        evaluationResults: z.string().describe(
+          "Evaluation results as JSON string from evaluate_certificate tool. Must contain 'checks' array with 'criterion', 'passed', and 'weight' fields."
+        ),
+        criteriaId: z.string().nullable().optional().describe(
+          "Optional criteria ID to retrieve weights and threshold. If not provided, weights should be in evaluationResults. If provided, evaluation will be saved to database."
+        ),
+        documentId: z.string().nullable().optional().describe(
+          "Optional document ID. If not provided, will try to extract from evaluationResults.documents. Used for saving evaluation."
+        ),
+        threshold: z.number().nullable().optional().describe(
+          "Optional pass/fail threshold (0-100). Defaults to 70 if not provided and not found in criteria."
+        ),
+        saveToDatabase: z.boolean().nullable().optional().default(true).describe(
+          "Whether to save the evaluation to database. Defaults to true if criteriaId is provided."
+        ),
+      })
+    }
+  );
 }
