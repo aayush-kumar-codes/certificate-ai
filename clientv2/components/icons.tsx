@@ -496,3 +496,169 @@ export function DashboardIcon({
         </svg>
     )
 }
+
+export function CloneIcon({
+    width = 32,
+    height = 32,
+    className,
+    style,
+}: IconProps) {
+    return (
+        <svg
+            width={width}
+            height={height}
+            viewBox="0 0 32 32"
+            fill="none"
+            xmlns="http://www.w3.org/2000/svg"
+            className={className}
+            style={style}
+        >
+            <rect
+                width="32"
+                height="32"
+                rx="8"
+                fill="url(#paint0_linear_5145_11687)"
+                fillOpacity="0.03"
+            />
+            <rect
+                width="16"
+                height="16"
+                transform="translate(8 8)"
+                fill="white"
+                fillOpacity="0.01"
+            />
+            <path
+                d="M22.44 23.0001C22.351 23.0013 22.2634 22.9788 22.186 22.9348C22.1087 22.8909 22.0444 22.8271 22 22.7501C21.334 21.6156 20.3849 20.6736 19.2455 20.0162C18.106 19.3589 16.8154 19.0087 15.5 19.0001V22.0001C15.4995 22.0988 15.4698 22.1951 15.4146 22.277C15.3594 22.3589 15.2813 22.4226 15.19 22.4601C15.0989 22.4984 14.9986 22.5088 14.9016 22.4901C14.8046 22.4714 14.7153 22.4244 14.645 22.3551L8.64497 16.3551C8.59811 16.3086 8.56091 16.2533 8.53552 16.1924C8.51014 16.1314 8.49707 16.0661 8.49707 16.0001C8.49707 15.9341 8.51014 15.8687 8.53552 15.8078C8.56091 15.7469 8.59811 15.6916 8.64497 15.6451L14.645 9.64507C14.7153 9.57569 14.8046 9.52869 14.9016 9.51001C14.9986 9.49132 15.0989 9.50178 15.19 9.54007C15.2813 9.57758 15.3594 9.64128 15.4146 9.72314C15.4698 9.805 15.4995 9.90136 15.5 10.0001V13.0551C17.5686 13.3208 19.47 14.3295 20.8499 15.8934C22.2297 17.4573 22.9939 19.4695 23 21.5551C22.9988 21.8894 22.9771 22.2234 22.935 22.5551C22.9225 22.6591 22.8776 22.7566 22.8068 22.8337C22.7359 22.9109 22.6426 22.9638 22.54 22.9851L22.44 23.0001ZM15.25 18.0001C16.5252 17.9818 17.7891 18.2405 18.9546 18.7585C20.12 19.2764 21.159 20.0413 22 21.0001C21.8495 19.1863 21.0578 17.4854 19.7667 16.2026C18.4756 14.9197 16.7697 14.1389 14.955 14.0001C14.8303 13.9888 14.7144 13.9312 14.6302 13.8386C14.5459 13.746 14.4995 13.6252 14.5 13.5001V11.2051L9.70497 16.0001L14.5 20.7951V18.5001C14.5 18.3675 14.5526 18.2403 14.6464 18.1465C14.7402 18.0527 14.8674 18.0001 15 18.0001H15.27H15.25Z"
+                fill="white"
+                fillOpacity="0.7"
+            />
+            <defs>
+                <linearGradient
+                    id="paint0_linear_5145_11687"
+                    x1="0"
+                    y1="16"
+                    x2="32"
+                    y2="16"
+                    gradientUnits="userSpaceOnUse"
+                >
+                    <stop offset="0.5" stopColor="#E8E8E1" />
+                    <stop offset="0.75" stopColor="#C7B5C1" />
+                </linearGradient>
+            </defs>
+        </svg>
+    )
+}
+
+export function EditIcon({
+    width = 32,
+    height = 32,
+    className,
+    style,
+}: IconProps) {
+    return (
+        <svg
+            width={width}
+            height={height}
+            viewBox="0 0 32 32"
+            fill="none"
+            xmlns="http://www.w3.org/2000/svg"
+            className={className}
+            style={style}
+        >
+            <rect
+                width="32"
+                height="32"
+                rx="8"
+                fill="url(#paint0_linear_5145_11685)"
+                fillOpacity="0.03"
+            />
+            <rect
+                width="16"
+                height="16"
+                transform="translate(8 8)"
+                fill="white"
+                fillOpacity="0.01"
+            />
+            <path
+                d="M23 21H9V22H23V21Z"
+                fill="white"
+                fillOpacity="0.7"
+            />
+            <path
+                d="M20.7 12.5C21.1 12.1 21.1 11.5 20.7 11.1L18.9 9.3C18.5 8.9 17.9 8.9 17.5 9.3L10 16.8V20H13.2L20.7 12.5ZM18.2 10L20 11.8L18.5 13.3L16.7 11.5L18.2 10ZM11 19V17.2L16 12.2L17.8 14L12.8 19H11Z"
+                fill="white"
+                fillOpacity="0.7"
+            />
+            <defs>
+                <linearGradient
+                    id="paint0_linear_5145_11685"
+                    x1="0"
+                    y1="16"
+                    x2="32"
+                    y2="16"
+                    gradientUnits="userSpaceOnUse"
+                >
+                    <stop offset="0.5" stopColor="#E8E8E1" />
+                    <stop offset="0.75" stopColor="#C7B5C1" />
+                </linearGradient>
+            </defs>
+        </svg>
+    )
+}
+
+export function CopyIcon({
+    width = 32,
+    height = 32,
+    className,
+    style,
+}: IconProps) {
+    return (
+        <svg
+            width={width}
+            height={height}
+            viewBox="0 0 32 32"
+            fill="none"
+            xmlns="http://www.w3.org/2000/svg"
+            className={className}
+            style={style}
+        >
+            <rect
+                width="32"
+                height="32"
+                rx="8"
+                fill="url(#paint0_linear_5145_11683)"
+                fillOpacity="0.03"
+            />
+            <rect
+                width="16"
+                height="16"
+                transform="translate(8 8)"
+                fill="white"
+                fillOpacity="0.01"
+            />
+            <path
+                d="M22 13V22H13V13H22ZM22 12H13C12.7348 12 12.4804 12.1054 12.2929 12.2929C12.1054 12.4804 12 12.7348 12 13V22C12 22.2652 12.1054 22.5196 12.2929 22.7071C12.4804 22.8946 12.7348 23 13 23H22C22.2652 23 22.5196 22.8946 22.7071 22.7071C22.8946 22.5196 23 22.2652 23 22V13C23 12.7348 22.8946 12.4804 22.7071 12.2929C22.5196 12.1054 22.2652 12 22 12Z"
+                fill="white"
+                fillOpacity="0.7"
+            />
+            <path
+                d="M10 17H9V10C9 9.73478 9.10536 9.48043 9.29289 9.29289C9.48043 9.10536 9.73478 9 10 9H17V10H10V17Z"
+                fill="white"
+                fillOpacity="0.7"
+            />
+            <defs>
+                <linearGradient
+                    id="paint0_linear_5145_11683"
+                    x1="0"
+                    y1="16"
+                    x2="32"
+                    y2="16"
+                    gradientUnits="userSpaceOnUse"
+                >
+                    <stop offset="0.5" stopColor="#E8E8E1" />
+                    <stop offset="0.75" stopColor="#C7B5C1" />
+                </linearGradient>
+            </defs>
+        </svg>
+    )
+}

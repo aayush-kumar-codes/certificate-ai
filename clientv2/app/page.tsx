@@ -4,7 +4,7 @@ import React, { useState, useRef, useEffect } from 'react'
 import { LeftMenu } from '@/components/LeftMenu'
 import { RightMenu } from '@/components/RightMenu'
 import { cn } from '@/lib/utils'
-import { DocumentWithBadgeIcon, ShareIcon, BellIcon, ChevronDownIcon, UploadIcon, MicIcon, PaperclipIcon, FolderOpenIcon, SendIcon, FileWithPaperclipIcon, CloseIcon } from '@/components/icons'
+import { DocumentWithBadgeIcon, ShareIcon, BellIcon, ChevronDownIcon, UploadIcon, MicIcon, PaperclipIcon, FolderOpenIcon, SendIcon, FileWithPaperclipIcon, CloseIcon, CloneIcon, EditIcon, CopyIcon } from '@/components/icons'
 import { FileUploadProgress, FileUploadItem } from '@/components/FileUploadProgress'
 import { uploadPDFs, UploadResponse, askQuestion, AskResponse } from '@/lib/api'
 
@@ -642,7 +642,8 @@ export default function Home() {
             {/* File upload progress - sticky component that always stays visible when files are uploaded */}
             {hasUploadedFiles && uploadFiles.length > 0 && (
               <div className="sticky top-0 z-10 flex items-start gap-4 mb-8 w-full bg-[#1b1b1b] pb-4">
-                <div className="flex flex-col gap-3 flex-1">
+               <div>
+               <div className="flex flex-col gap-3 flex-1">
                   <div
                     className="p-4 opacity-100 min-h-[149px]"
                     style={{
@@ -659,7 +660,44 @@ export default function Home() {
                       onRemove={removeFile}
                     />
                   </div>
+                  
                 </div>
+                
+                <div 
+        className="flex items-center gap-2 justify-end !pt-[14px] !pr-[30px]"
+      >
+        <button
+          className="p-1 hover:opacity-70 transition-opacity cursor-pointer bg-transparent border-none outline-none"
+          aria-label="Clone"
+        >
+          <CloneIcon
+            width={32}
+            height={32}
+            className="text-white"
+          />
+        </button>
+        <button
+          className="p-1 hover:opacity-70 transition-opacity cursor-pointer bg-transparent border-none outline-none"
+          aria-label="Edit"
+        >
+          <EditIcon
+            width={32}
+            height={32}
+            className="text-white"
+          />
+        </button>
+        <button
+          className="p-1 hover:opacity-70 transition-opacity cursor-pointer bg-transparent border-none outline-none"
+          aria-label="Copy"
+        >
+          <CopyIcon
+            width={32}
+            height={32}
+            className="text-white"
+          />
+        </button>
+      </div>
+               </div>
               </div>
             )}
 

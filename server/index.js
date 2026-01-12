@@ -8,7 +8,7 @@ dotenv.config();
 const app = express();
 app.use(express.json());
 app.use(cors( {
-  origin: ["http://116.202.210.102:6002","http://localhost:1597"],
+  origin: ["http://116.202.210.102:6002","http://localhost:1597","http://116.202.210.102:1597"],
   methods: ["GET", "POST", "PUT", "DELETE"],
   allowedHeaders: ["Content-Type", "Authorization"],
 }));

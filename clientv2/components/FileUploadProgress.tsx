@@ -1,7 +1,7 @@
 'use client'
 
 import React from 'react'
-import { FileWithPaperclipIcon, CloseIcon } from './icons'
+import { FileWithPaperclipIcon, CloseIcon, CloneIcon, EditIcon, CopyIcon } from './icons'
 import { cn } from '@/lib/utils'
 
 export interface FileUploadItem {
@@ -22,6 +22,7 @@ export function FileUploadProgress({ files, onCancel, onRemove }: FileUploadProg
   if (files.length === 0) return null
 
   return (
+    <>
     <div className="relative w-full">
       {/* Header text - absolutely positioned */}
       <p
@@ -57,7 +58,11 @@ export function FileUploadProgress({ files, onCancel, onRemove }: FileUploadProg
           />
         ))}
       </div>
-    </div>
+
+      {/* Action Icons - Bottom Right Corner */}
+    </div>  
+    
+    </>
   )
 }
 
