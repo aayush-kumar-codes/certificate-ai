@@ -4,7 +4,7 @@ import React, { useState, useRef, useEffect } from 'react'
 import { LeftMenu } from '@/components/LeftMenu'
 import { RightMenu } from '@/components/RightMenu'
 import { cn } from '@/lib/utils'
-import { DocumentWithBadgeIcon, ShareIcon, BellIcon, ChevronDownIcon, UploadIcon, MicIcon, PaperclipIcon, FolderOpenIcon, SendIcon, FileWithPaperclipIcon, CloseIcon, CloneIcon, EditIcon, CopyIcon } from '@/components/icons'
+import { DocumentWithBadgeIcon, ShareIcon, BellIcon, ChevronDownIcon, UploadIcon, MicIcon, PaperclipIcon, FolderOpenIcon, SendIcon, CloneIcon, EditIcon, CopyIcon, BackIcon } from '@/components/icons'
 import { FileUploadProgress, FileUploadItem } from '@/components/FileUploadProgress'
 import { uploadPDFs, UploadResponse, askQuestion, AskResponse } from '@/lib/api'
 
@@ -662,7 +662,7 @@ export default function Home() {
                   </div>
                   
                 </div>
-                
+                {/* Action Buttons */}
                 <div 
         className="flex items-center gap-2 justify-end !pt-[14px] !pr-[30px]"
       >
@@ -716,7 +716,7 @@ export default function Home() {
                       msg.role === 'user' ? 'justify-end' : 'justify-start'
                     }`}
                     style={{
-                      gap: msg.role === 'bot' ? '16px' : '0px',
+                      gap: msg.role === 'bot' ? '16px' : '16px',
                     }}
                   >
                     {msg.role === 'bot' && (
@@ -731,25 +731,88 @@ export default function Home() {
                         }}
                       />
                     )}
-                    <div
-                      className={`opacity-100 ${
-                        msg.role === 'user'
-                          ? ''
-                          : 'bg-[#1B1B1B]'
-                      }`}
-                      style={{
-                        ...(msg.role === 'user' ? {
-                          maxWidth: '760px',
-                          minWidth: 'fit-content',
-                          opacity: 1,
-                          borderTopLeftRadius: '30px',
-                          borderTopRightRadius: '30px',
-                          borderBottomLeftRadius: '30px',
-                          borderBottomRightRadius: '0px',
-                          background: 'linear-gradient(90deg, rgba(88, 132, 206, 0.2) 0%, rgba(227, 196, 193, 0.2) 50%, rgba(225, 231, 203, 0.2) 75%, rgba(177, 162, 195, 0.2) 100%)',
-                          padding: '12px 16px',
-                          marginLeft: 'auto',
-                        } : {
+                    {msg.role === 'user' ? (
+                      <div className="flex flex-col items-end">
+                        <div className="flex items-start" style={{ gap: '16px' }}>
+                          <div
+                            className="opacity-100"
+                            style={{
+                              maxWidth: '760px',
+                              minWidth: 'fit-content',
+                              opacity: 1,
+                              borderTopLeftRadius: '30px',
+                              borderTopRightRadius: '30px',
+                              borderBottomLeftRadius: '30px',
+                              borderBottomRightRadius: '0px',
+                              background: 'linear-gradient(90deg, rgba(88, 132, 206, 0.2) 0%, rgba(227, 196, 193, 0.2) 50%, rgba(225, 231, 203, 0.2) 75%, rgba(177, 162, 195, 0.2) 100%)',
+                              padding: '12px 16px',
+                            }}
+                          >
+                            <p
+                              className="font-normal text-sm tracking-normal whitespace-pre-line break-words text-white"
+                              style={{
+                                fontFamily: 'var(--font-poppins), Poppins, sans-serif',
+                                fontStyle: 'normal',
+                                wordWrap: 'break-word',
+                                overflowWrap: 'break-word',
+                              }}
+                            >
+                              {msg.content}
+                            </p>
+                          </div>
+                          <img
+                            src="/demouser.jpg"
+                            alt="User"
+                            className="shrink-0 opacity-100 rounded-full"
+                            style={{
+                              width: '51.04205703735356px',
+                              height: '51.04205703735356px',
+                            }}
+                          />
+                        </div>
+                        {/* Action Buttons for User Messages - aligned to left edge of message container */}
+                        <div 
+                          className="flex items-center gap-2 !pt-[14px]"
+                          style={{
+                            alignSelf: 'flex-start',
+                          }}
+                        >
+                          <button
+                            className="p-1 hover:opacity-70 transition-opacity cursor-pointer bg-transparent border-none outline-none"
+                            aria-label="Back"
+                          >
+                            <CloneIcon
+                              width={32}
+                              height={32}
+                              className="text-white"
+                            />
+                          </button>
+                          <button
+                            className="p-1 hover:opacity-70 transition-opacity cursor-pointer bg-transparent border-none outline-none"
+                            aria-label="Edit"
+                          >
+                            <EditIcon
+                              width={32}
+                              height={32}
+                              className="text-white"
+                            />
+                          </button>
+                          <button
+                            className="p-1 hover:opacity-70 transition-opacity cursor-pointer bg-transparent border-none outline-none"
+                            aria-label="Copy"
+                          >
+                            <CopyIcon
+                              width={32}
+                              height={32}
+                              className="text-white"
+                            />
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div
+                        className="opacity-100 bg-[#1B1B1B]"
+                        style={{
                           maxWidth: '760px',
                           padding: '16px',
                           borderTopLeftRadius: '30px',
@@ -757,23 +820,20 @@ export default function Home() {
                           borderBottomLeftRadius: '30px',
                           borderBottomRightRadius: '0px',
                           background: '#1B1B1B',
-                        }),
-                      }}
-                    >
-                      <p
-                        className="font-normal text-sm tracking-normal whitespace-pre-line break-words text-white"
-                        style={{
-                          fontFamily: 'var(--font-poppins), Poppins, sans-serif',
-                          fontStyle: 'normal',
-                          wordWrap: 'break-word',
-                          overflowWrap: 'break-word',
                         }}
                       >
-                        {msg.content}
-                      </p>
-                    </div>
-                    {msg.role === 'user' && (
-                      <div style={{ width: '51.04205703735356px', flexShrink: 0 }} />
+                        <p
+                          className="font-normal text-sm tracking-normal whitespace-pre-line break-words text-white"
+                          style={{
+                            fontFamily: 'var(--font-poppins), Poppins, sans-serif',
+                            fontStyle: 'normal',
+                            wordWrap: 'break-word',
+                            overflowWrap: 'break-word',
+                          }}
+                        >
+                          {msg.content}
+                        </p>
+                      </div>
                     )}
                   </div>
                 ))}

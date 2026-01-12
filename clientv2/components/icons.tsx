@@ -662,3 +662,58 @@ export function CopyIcon({
         </svg>
     )
 }
+
+export function BackIcon({
+    width = 32,
+    height = 32,
+    className,
+    style,
+}: IconProps) {
+    return (
+        <svg
+            width={width}
+            height={height}
+            viewBox="0 0 32 32"
+            fill="none"
+            xmlns="http://www.w3.org/2000/svg"
+            className={className}
+            style={style}
+        >
+            <rect
+                width="32"
+                height="32"
+                rx="8"
+                fill="url(#paint0_linear_back_icon)"
+                fillOpacity="0.03"
+            />
+            <rect
+                width="16"
+                height="16"
+                transform="translate(8 8)"
+                fill="white"
+                fillOpacity="0.01"
+            />
+            <path
+                d="M18 10L13 15L18 20"
+                stroke="white"
+                strokeOpacity="0.7"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+            />
+            <defs>
+                <linearGradient
+                    id="paint0_linear_back_icon"
+                    x1="0"
+                    y1="16"
+                    x2="32"
+                    y2="16"
+                    gradientUnits="userSpaceOnUse"
+                >
+                    <stop offset="0.5" stopColor="#E8E8E1" />
+                    <stop offset="0.75" stopColor="#C7B5C1" />
+                </linearGradient>
+            </defs>
+        </svg>
+    )
+}
