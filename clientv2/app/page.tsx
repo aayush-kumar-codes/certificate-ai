@@ -537,7 +537,7 @@ export default function Home() {
         <div className='flex flex-col !pt-10 !pb-4 gap-4 items-center justify-between w-full flex-1 min-h-0 overflow-hidden'>
           <div 
             ref={chatContainerRef} 
-            className="flex-1 flex flex-col overflow-y-auto px-8 py-12 w-full max-w-4xl min-h-0"
+            className="flex-1 flex flex-col overflow-y-auto px-8 py-12 w-full max-w-4xl min-h-0 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]"
             onDragOver={handleDragOver}
             onDragLeave={handleDragLeave}
             onDrop={handleDrop}
