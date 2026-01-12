@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "pnpm dlx @react-grab/cursor@latest && next dev --turbopack -p 1597",
+    "dev": "next dev --turbopack -p 1597",
     "build": "next build",
     "start": "next start",
     "lint": "eslint"
