@@ -84,7 +84,7 @@ function FileProgressItem({ fileItem, onCancel, onRemove }: FileProgressItemProp
   return (
     <div
       className={cn(
-        "flex items-center justify-start gap-3 relative p-3 px-4 border",
+        "flex items-center justify-start gap-3 relative p-3 !px-[8px] border",
         isError ? "border-red-500/30" : "border-[rgba(232,232,225,0.15)]"
       )}
       style={{

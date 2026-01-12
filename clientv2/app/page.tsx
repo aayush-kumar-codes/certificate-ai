@@ -3,7 +3,6 @@
 import React, { useState, useRef, useEffect } from 'react'
 import { LeftMenu } from '@/components/LeftMenu'
 import { RightMenu } from '@/components/RightMenu'
-import { X } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { DocumentWithBadgeIcon, ShareIcon, BellIcon, ChevronDownIcon, UploadIcon, MicIcon, PaperclipIcon, FolderOpenIcon, SendIcon, FileWithPaperclipIcon, CloseIcon } from '@/components/icons'
 import { FileUploadProgress, FileUploadItem } from '@/components/FileUploadProgress'
@@ -411,12 +410,7 @@ export default function Home() {
         }}
       >
         <div className="flex-1 h-full">
-          <img
-            src="/certificate1.jpeg"
-            alt="Certificate 1"
-            className="w-full h-full object-contain"
-            style={{ width: '100%', height: '100%' }}
-          />
+          
         </div>
         <div className="flex-1 h-full">
           <img

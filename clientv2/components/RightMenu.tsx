@@ -2,7 +2,7 @@
 
 import * as React from 'react'
 import { cn } from '@/lib/utils'
-import { ToggleMenuIcon, LeftMenuLogo } from '@/components/icons'
+import { ToggleMenuIcon, LeftMenuLogo, CodeBranchIcon, DocumentSidebarIcon, ChartIcon, DashboardIcon } from '@/components/icons'
 
 export function RightMenu() {
     const [isExpanded, setIsExpanded] = React.useState(false)
@@ -44,6 +44,29 @@ export function RightMenu() {
                     <ToggleMenuIcon width={16} height={16} />
                 </div>
             </button>
+
+            {/* Icons Section - Vertically Centered */}
+            <div className="absolute top-[218px] left-1/2 transform -translate-x-1/2 -translate-y-1/2 flex flex-col items-center gap-12">
+                {/* Top Icon - CodeBranchIcon */}
+                <div className="opacity-100 w-[20px] h-[18px] bg-transparent">
+                    <CodeBranchIcon width={20} height={18} />
+                </div>
+
+                {/* Second Icon - DocumentSidebarIcon */}
+                <div className="opacity-100 w-[18px] h-[17px] bg-transparent">
+                    <DocumentSidebarIcon width={18} height={17} />
+                </div>
+
+                {/* Third Icon - ChartIcon */}
+                <div className="opacity-100 w-[18px] h-[18px] bg-transparent">
+                    <ChartIcon width={18} height={18} />
+                </div>
+
+                {/* Bottom Icon - DashboardIcon */}
+                <div className="opacity-100 w-[20px] h-[20px] bg-transparent">
+                    <DashboardIcon width={20} height={20} />
+                </div>
+            </div>
 
         </aside>
     )

@@ -140,7 +140,8 @@ export function LeftMenu() {
                 <div className="absolute top-[903px] left-[20px] opacity-100 rounded-full overflow-hidden w-[33px] h-[33px] bg-transparent">
                     {/* Placeholder profile picture - replace with actual image */}
                     <div className="w-full h-full bg-gradient-to-br from-blue-400 to-purple-500 flex items-center justify-center border-2 border-[#3a3a3a] rounded-full">
-                        <span className="text-white text-xs font-semibold">U</span>
+                        <img src="/demouser.jpg" alt="User" className="w-full h-full object-cover rounded-full" />
+                       
                     </div>
                 </div>
 
