@@ -48,6 +48,7 @@ export default function RootLayout({
       </head>
       <body
         className={`${geistSans.variable} ${geistMono.variable} ${poppins.variable} antialiased`}
+        suppressHydrationWarning
       >
         {children}
       </body>
