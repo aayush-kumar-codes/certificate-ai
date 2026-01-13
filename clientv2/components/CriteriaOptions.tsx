@@ -5,6 +5,21 @@ import { useState } from "react"
 import WriteModal from "./write-modal"
 import UploadModal from "./upload-modal"
 
+interface ChatMessage {
+  id: string
+  role: 'user' | 'bot'
+  content: string
+  timestamp: number
+  showCriteriaOptions?: boolean
+}
+
+interface CriteriaOptionsProps {
+  sessionId?: string
+  setSessionId?: (sessionId: string) => void
+  setChatMessages?: (updater: (prev: ChatMessage[]) => ChatMessage[]) => void
+  setIsLoadingResponse?: (loading: boolean) => void
+}
+
 const options = [
   {
     title: "Write up",
@@ -26,7 +41,12 @@ const options = [
   },
 ]
 
-export default function CriteriaOptions() {
+export default function CriteriaOptions({ 
+  sessionId, 
+  setSessionId, 
+  setChatMessages,
+  setIsLoadingResponse 
+}: CriteriaOptionsProps) {
   const [activeModal, setActiveModal] = useState<string | null>(null)
 
   const handleOptionClick = (id: string) => {
@@ -66,7 +86,15 @@ export default function CriteriaOptions() {
         </div>
       </div>
 
-      {activeModal === "write" && <WriteModal onClose={() => setActiveModal(null)} />}
+      {activeModal === "write" && (
+        <WriteModal 
+          onClose={() => setActiveModal(null)} 
+          sessionId={sessionId}
+          setSessionId={setSessionId}
+          setChatMessages={setChatMessages}
+          setIsLoadingResponse={setIsLoadingResponse}
+        />
+      )}
       {activeModal === "upload" && <UploadModal onClose={() => setActiveModal(null)} />}
     </>
   )

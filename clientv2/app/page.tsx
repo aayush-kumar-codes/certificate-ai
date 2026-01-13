@@ -839,7 +839,12 @@ export default function Home() {
                           >
                             Please provide the questions or information you want to include in your questionnaire. The clearer and more organized your inputs are, the more accurate and useful the final questionnaire will be.
                           </p>
-                          <CriteriaOptions />
+                          <CriteriaOptions 
+                            sessionId={sessionId}
+                            setSessionId={setSessionId}
+                            setChatMessages={setChatMessages}
+                            setIsLoadingResponse={setIsLoadingResponse}
+                          />
                         </div>
                       ) : (
                         <div

@@ -2,26 +2,97 @@
 
 import { X } from "lucide-react"
 import { useState } from "react"
+import { askQuestion } from "@/lib/api"
+
+interface ChatMessage {
+  id: string
+  role: 'user' | 'bot'
+  content: string
+  timestamp: number
+  showCriteriaOptions?: boolean
+}
 
 interface WriteModalProps {
   onClose: () => void
+  sessionId?: string
+  setSessionId?: (sessionId: string) => void
+  setChatMessages?: (updater: (prev: ChatMessage[]) => ChatMessage[]) => void
+  setIsLoadingResponse?: (loading: boolean) => void
 }
 
-export default function WriteModal({ onClose }: WriteModalProps) {
+export default function WriteModal({ 
+  onClose, 
+  sessionId, 
+  setSessionId, 
+  setChatMessages,
+  setIsLoadingResponse 
+}: WriteModalProps) {
   const [criteria, setCriteria] = useState("")
   const [isSubmitting, setIsSubmitting] = useState(false)
 
   const handleSubmit = async () => {
-    if (!criteria.trim()) return
+    if (!criteria.trim() || isSubmitting) return
 
+    const criteriaText = criteria.trim()
     setIsSubmitting(true)
-    // Mock API call - replace with actual API later
-    console.log("Submitting criteria:", criteria)
+    setIsLoadingResponse?.(true)
 
-    setTimeout(() => {
+    // Add user message to chat immediately
+    const userMessage: ChatMessage = { 
+      id: `user-${Date.now()}-${Math.random()}`,
+      role: 'user', 
+      content: criteriaText,
+      timestamp: Date.now()
+    }
+    setChatMessages?.(prev => [...prev, userMessage])
+
+    // Close modal immediately
+    onClose()
+
+    // Continue API call in the background
+    try {
+      console.log('=== Sending criteria via WriteModal ===', { criteria: criteriaText, sessionId })
+      
+      // Call the API
+      const response = await askQuestion(
+        criteriaText,
+        sessionId || undefined
+      )
+
+      console.log('=== Received response in WriteModal ===', { 
+        answer: response.answer, 
+        sessionId: response.sessionId,
+        answerLength: response.answer?.length 
+      })
+
+      // Update sessionId if provided
+      if (response.sessionId && setSessionId && !sessionId) {
+        setSessionId(response.sessionId)
+      }
+
+      // Add bot response to chat
+      const botMessage: ChatMessage = {
+        id: `bot-${Date.now()}-${Math.random()}`,
+        role: 'bot',
+        content: response.answer || '',
+        timestamp: Date.now()
+      }
+
+      setChatMessages?.(prev => [...prev, botMessage])
+    } catch (error) {
+      console.error('=== Error sending criteria ===', error)
+      const errorMessage = error instanceof Error ? error.message : 'Failed to send criteria'
+      const errorBotMessage: ChatMessage = {
+        id: `bot-error-${Date.now()}-${Math.random()}`,
+        role: 'bot',
+        content: `Error: ${errorMessage}`,
+        timestamp: Date.now()
+      }
+      setChatMessages?.(prev => [...prev, errorBotMessage])
+    } finally {
       setIsSubmitting(false)
-      onClose()
-    }, 1000)
+      setIsLoadingResponse?.(false)
+    }
   }
 
   return (
