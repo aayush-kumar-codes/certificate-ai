@@ -6,6 +6,7 @@ import { createEvaluateCertificateTool } from "../tools/evaluateCertificate.js";
 import { createCalculateScoreTool } from "../tools/calculateScore.js";
 import { createReevaluateCertificateTool } from "../tools/reevaluateCertificate.js";
 import { createAgentInfoTool } from "../tools/agentInfo.js";
+import { createGenerateCriteriaTool } from "../tools/generateCriteria.js";
 import { AIMessage, SystemMessage } from "@langchain/core/messages";
 
 const llm = new ChatOpenAI({
@@ -19,6 +20,7 @@ You are a certificate validation expert assistant. You maintain conversation con
 
 CRITERIA MANAGEMENT:
 - When a user specifies validation criteria (e.g., "validate based on expiry date", "check if agency name is ABC", "verify ISO 27001 compliance"), use the manage_criteria tool to STORE the criteria
+- When a user asks to generate criteria from their uploaded documents (e.g., "generate criteria", "AI generate criteria", "create criteria from my documents", "generate AI criteria"), use the generate_criteria tool to automatically analyze documents and create criteria
 - Criteria can include weights to indicate importance: {"criterionName": {"weight": 0.3, "required": true, "value": "..."}}
 - When user asks about weights (e.g., "How important is expiry date vs agency name?"), help them assign weights that sum to ≤ 1.0
 - When you need to retrieve previously stored criteria, use manage_criteria with action "retrieve"
@@ -135,7 +137,7 @@ When users ask about yourself, your capabilities, or your purpose, you can answe
 About You:
 - Identity: You are a certificate validation expert assistant designed to help users validate certificates based on custom criteria.
 - Core Capabilities: You can validate certificates based on custom criteria (expiry dates, agency names, ISO standards, etc.), manage validation criteria with configurable weights, search and analyze uploaded certificate documents, calculate weighted scores (0-100), and evaluate multiple certificates in a single session.
-- Available Tools: search_document (searches uploaded documents filtered by session), manage_criteria (stores/retrieves/updates/deletes validation criteria), evaluate_certificate (performs validation checks), calculate_score (computes weighted scores), reevaluate_certificate (re-evaluates with criteria modifications and shows comparison), and agent_info (provides detailed agent information).
+- Available Tools: search_document (searches uploaded documents filtered by session), manage_criteria (stores/retrieves/updates/deletes validation criteria), generate_criteria (automatically generates criteria from uploaded documents), evaluate_certificate (performs validation checks), calculate_score (computes weighted scores), reevaluate_certificate (re-evaluates with criteria modifications and shows comparison), and agent_info (provides detailed agent information).
 - Limitations: You require documents to be uploaded before validation, can only analyze documents uploaded in the current session, validation is based on extracted text (OCR/PDF parsing), cannot verify certificates against external databases, and scoring requires criteria weights to be properly configured.
 - Purpose: To help users validate certificates by analyzing uploaded documents against custom criteria, calculating weighted scores, and providing detailed validation results.
 
@@ -155,6 +157,7 @@ export function createCertificateValidationAgentNode(sessionId) {
     createCalculateScoreTool(sessionId),
     createReevaluateCertificateTool(sessionId),
     createAgentInfoTool("certificate", sessionId),
+    createGenerateCriteriaTool(sessionId),
   ];
   
   const toolNode = new ToolNode(tools);

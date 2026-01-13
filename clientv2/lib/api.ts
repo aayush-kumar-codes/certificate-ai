@@ -2,6 +2,7 @@ const UPLOAD_API_URL = "http://116.202.210.102:5001/api/upload"
 const UPLOAD_PROGRESS_API_URL = "http://116.202.210.102:5001/api/upload/progress"
 const ASK_API_URL = "http://116.202.210.102:5001/api/chat"
 const FEEDBACK_API_URL = "http://116.202.210.102:5001/api/feedback"
+const GENERATE_CRITERIA_API_URL = "http://116.202.210.102:5001/api/generate-criteria"
 
 export interface UploadProgressResponse {
   uploadId: string
@@ -74,6 +75,16 @@ export interface FeedbackResponse {
     sessionId: string
     createdAt: string
   }
+  error?: string
+}
+
+export interface GenerateCriteriaResponse {
+  success: boolean
+  criteriaId?: string
+  criteria?: Record<string, any>
+  description?: string
+  threshold?: number
+  message?: string
   error?: string
 }
 
@@ -352,6 +363,33 @@ export async function submitFeedback(
   } catch (error) {
     throw new Error(
       error instanceof Error ? error.message : "Failed to submit feedback",
+    )
+  }
+}
+
+export async function generateCriteria(
+  sessionId: string,
+): Promise<GenerateCriteriaResponse> {
+  try {
+    const response = await fetch(GENERATE_CRITERIA_API_URL, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ sessionId }),
+    })
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({ error: "Request failed" }))
+      throw new Error(errorData.error || "Failed to generate criteria")
+    }
+
+    const data: GenerateCriteriaResponse = await response.json()
+    return data
+  } catch (error) {
+    console.error("Error generating criteria:", error)
+    throw new Error(
+      error instanceof Error ? error.message : "Failed to generate criteria"
     )
   }
 }
