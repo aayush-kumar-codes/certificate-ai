@@ -7,12 +7,14 @@ import { cn } from '@/lib/utils'
 import { DocumentWithBadgeIcon, ShareIcon, BellIcon, ChevronDownIcon, UploadIcon, MicIcon, PaperclipIcon, FolderOpenIcon, SendIcon, CloneIcon, EditIcon, CopyIcon, BackIcon } from '@/components/icons'
 import { FileUploadProgress, FileUploadItem } from '@/components/FileUploadProgress'
 import { uploadPDFs, UploadResponse, askQuestion, AskResponse } from '@/lib/api'
+import CriteriaOptions from '@/components/CriteriaOptions'
 
 interface ChatMessage {
   id: string
   role: 'user' | 'bot'
   content: string
   timestamp: number
+  showCriteriaOptions?: boolean
 }
 
 export default function Home() {
@@ -39,14 +41,15 @@ export default function Home() {
         setChatMessages((prev) => {
           // Check if message already exists to avoid duplicates
           const alreadyExists = prev.some(
-            (msg) => msg.role === 'bot' && msg.content === uploadResponseMessage
+            (msg) => msg.role === 'bot' && msg.showCriteriaOptions === true
           )
           if (!alreadyExists) {
             return [...prev, { 
               id: `bot-upload-${Date.now()}-${Math.random()}`,
               role: 'bot', 
-              content: uploadResponseMessage,
-              timestamp: Date.now()
+              content: 'Enter Your Questionnaire',
+              timestamp: Date.now(),
+              showCriteriaOptions: true
             }]
           }
           return prev
@@ -194,6 +197,7 @@ export default function Home() {
       }
 
       // Store the upload response message to show after upload completes
+      // We'll show CriteriaOptions component instead of the text message
       if (response.message) {
         setUploadResponseMessage(response.message)
       }
@@ -422,7 +426,7 @@ export default function Home() {
       {/* Main Content Area */}
       <main className="flex-1 !pt-20 relative flex flex-col items-center bg-[#1b1b1b] w-full min-h-0 overflow-hidden">
         <div
-          className="mx-auto mt-8 opacity-100 w-[536px] h-[55px] rounded-[60px] p-[1px]"
+          className="mx-auto opacity-100 w-[536px] h-[55px] rounded-[60px] p-[1px]"
           style={{
             background: 'linear-gradient(90deg, rgba(96, 82, 169, 0.2) 0%, rgba(232, 232, 225, 0.2) 50%, rgba(199, 181, 193, 0.2) 75%, rgba(153, 83, 107, 0.2) 100%)',
             boxShadow: '0px 0px 15.79px 0px #A3BDCE4D',
@@ -529,17 +533,17 @@ export default function Home() {
         </div>
 
         {/* Chat Content Area - Centered */}
-        <div className='flex flex-col !pt-10 !pb-4 gap-4 items-center justify-between w-full flex-1 min-h-0 overflow-hidden'>
+        <div className='flex flex-col pb-4 gap-4 items-center justify-between w-full flex-1 min-h-0 overflow-hidden'>
           <div 
             ref={chatContainerRef} 
-            className="flex-1 flex flex-col overflow-y-auto px-8 py-12 w-full max-w-4xl min-h-0 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]"
+            className="flex-1 flex flex-col overflow-y-auto py-12 w-full max-w-4xl min-h-0 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]"
             onDragOver={handleDragOver}
             onDragLeave={handleDragLeave}
             onDrop={handleDrop}
           >
             {/* Initial chat message - only show if no files uploaded and no messages */}
             {!hasUploadedFiles && chatMessages.length === 0 && (
-              <div className="flex items-center !pt-10 gap-4 mb-8 w-full">
+              <div className="flex items-center gap-4 mb-8 w-full">
                 {/* Mesh Image on the left */}
                 <img
                   src="/mesh.jpg"
@@ -567,7 +571,7 @@ export default function Home() {
 
             {/* File Upload Zone - hide when files are uploaded */}
             {!hasUploadedFiles && (
-              <div className="w-full max-w-3xl !pt-5 mx-auto">
+              <div className="w-full max-w-3xl mx-auto">
                 <div
                   onClick={handleUploadClick}
                   onDragOver={handleDragOver}
@@ -636,7 +640,7 @@ export default function Home() {
 
             {/* File upload progress - sticky component that always stays visible when files are uploaded */}
             {hasUploadedFiles && uploadFiles.length > 0 && (
-              <div className="sticky top-0 z-10 flex items-start gap-4 mb-8 w-full bg-[#1b1b1b] pb-4">
+              <div className="sticky top-0 z-10 flex items-start gap-4 mb-8 w-full bg-[#1b1b1b]">
                <div>
                <div className="flex flex-col gap-3 flex-1">
                   <div
@@ -699,7 +703,7 @@ export default function Home() {
             {/* Chat Messages */}
             {chatMessages.length > 0 && (
               <div 
-                className="flex flex-col gap-4 mb-8 w-full"
+                className="flex flex-col gap-4 w-full"
                 style={{
                   marginTop: hasUploadedFiles && uploadFiles.length > 0 ? '50px' : undefined
                 }}
@@ -805,30 +809,64 @@ export default function Home() {
                         </div>
                       </div>
                     ) : (
-                      <div
-                        className="opacity-100 bg-[#1B1B1B]"
-                        style={{
-                          maxWidth: '760px',
-                          padding: '16px',
-                          borderTopLeftRadius: '30px',
-                          borderTopRightRadius: '30px',
-                          borderBottomLeftRadius: '30px',
-                          borderBottomRightRadius: '0px',
-                          background: '#1B1B1B',
-                        }}
-                      >
-                        <p
-                          className="font-normal text-sm tracking-normal whitespace-pre-line break-words text-white"
+                      msg.showCriteriaOptions ? (
+                        <div
+                          className="opacity-100 bg-[#1B1B1B]"
                           style={{
-                            fontFamily: 'var(--font-poppins), Poppins, sans-serif',
-                            fontStyle: 'normal',
-                            wordWrap: 'break-word',
-                            overflowWrap: 'break-word',
+                            padding: '16px',
+                            borderTopLeftRadius: '30px',
+                            borderTopRightRadius: '30px',
+                            borderBottomLeftRadius: '30px',
+                            borderBottomRightRadius: '0px',
+                            background: '#1B1B1B',
                           }}
                         >
-                          {msg.content}
-                        </p>
-                      </div>
+                          <h2
+                            className="text-white font-semibold text-lg mb-2"
+                            style={{
+                              fontFamily: 'var(--font-poppins), Poppins, sans-serif',
+                              fontStyle: 'normal',
+                            }}
+                          >
+                            {msg.content}
+                          </h2>
+                          <p
+                            className="text-white font-normal text-sm mb-6"
+                            style={{
+                              fontFamily: 'var(--font-poppins), Poppins, sans-serif',
+                              fontStyle: 'normal',
+                            }}
+                          >
+                            Please provide the questions or information you want to include in your questionnaire. The clearer and more organized your inputs are, the more accurate and useful the final questionnaire will be.
+                          </p>
+                          <CriteriaOptions />
+                        </div>
+                      ) : (
+                        <div
+                          className="opacity-100 bg-[#1B1B1B]"
+                          style={{
+                            maxWidth: '760px',
+                            padding: '16px',
+                            borderTopLeftRadius: '30px',
+                            borderTopRightRadius: '30px',
+                            borderBottomLeftRadius: '30px',
+                            borderBottomRightRadius: '0px',
+                            background: '#1B1B1B',
+                          }}
+                        >
+                          <p
+                            className="font-normal text-sm tracking-normal whitespace-pre-line break-words text-white"
+                            style={{
+                              fontFamily: 'var(--font-poppins), Poppins, sans-serif',
+                              fontStyle: 'normal',
+                              wordWrap: 'break-word',
+                              overflowWrap: 'break-word',
+                            }}
+                          >
+                            {msg.content}
+                          </p>
+                        </div>
+                      )
                     )}
                   </div>
                 ))}
