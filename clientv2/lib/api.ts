@@ -40,6 +40,14 @@ export interface UploadResponse {
     error: string
   }>
   uploadId?: string
+  criteria?: {
+    criteriaId: string
+    criteria: Record<string, any>
+    description: string
+    threshold: number
+  }
+  criteriaGenerationStatus?: 'completed' | 'failed' | 'skipped'
+  criteriaGenerationError?: string
 }
 
 export interface AskResponse {
@@ -369,6 +377,7 @@ export async function submitFeedback(
 
 export async function generateCriteria(
   sessionId: string,
+  documentId?: string,
 ): Promise<GenerateCriteriaResponse> {
   try {
     const response = await fetch(GENERATE_CRITERIA_API_URL, {
@@ -376,7 +385,7 @@ export async function generateCriteria(
       headers: {
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({ sessionId }),
+      body: JSON.stringify({ sessionId, ...(documentId && { documentId }) }),
     })
 
     if (!response.ok) {

@@ -176,7 +176,70 @@ These criteria have been saved and are ready to use for validation. You can modi
           setIsLoadingResponse={setIsLoadingResponse}
         />
       )}
-      {activeModal === "upload" && <UploadModal onClose={() => setActiveModal(null)} />}
+      {activeModal === "upload" && (
+        <UploadModal 
+          onClose={() => setActiveModal(null)} 
+          sessionId={sessionId}
+          setSessionId={setSessionId}
+          setIsLoadingResponse={setIsLoadingResponse}
+          onUploadComplete={(response) => {
+            // Handle upload completion - criteria generation is already done on backend
+            // The response will contain criteria data if generation was successful
+            console.log("Upload completed with criteria:", response.criteria)
+            
+            // Display criteria in chat if generation was successful
+            if (response.criteria && response.criteriaGenerationStatus === 'completed') {
+              // Format criteria for display
+              const criteriaList = Object.entries(response.criteria.criteria)
+                .map(([name, data]: [string, any]) => {
+                  const weight = (data.weight * 100).toFixed(0)
+                  const value = data.value ? `: ${data.value}` : ""
+                  const required = data.required ? " (Required)" : ""
+                  return `• ${name}${value} - Weight: ${weight}%${required}`
+                })
+                .join("\n")
+
+              const criteriaMessageContent = `✅ AI Criteria Generated Successfully!
+
+Description: ${response.criteria.description || "Generated from your documents"}
+
+Criteria:
+${criteriaList}
+
+Threshold: ${response.criteria.threshold || 70}/100
+
+These criteria have been saved and are ready to use for validation. You can modify them anytime by asking me to update specific criteria.`
+
+              // Add criteria message to chat
+              setChatMessages?.(prev => {
+                const alreadyExists = prev.some(
+                  (msg) => msg.role === 'bot' && msg.content.includes('AI Criteria Generated Successfully')
+                )
+                if (!alreadyExists) {
+                  return [...prev, {
+                    id: `bot-criteria-${Date.now()}-${Math.random()}`,
+                    role: 'bot',
+                    content: criteriaMessageContent,
+                    timestamp: Date.now()
+                  }]
+                }
+                return prev
+              })
+            } else if (response.criteriaGenerationStatus === 'failed') {
+              // Show error if criteria generation failed
+              setChatMessages?.(prev => [
+                ...prev,
+                {
+                  id: `bot-criteria-error-${Date.now()}-${Math.random()}`,
+                  role: 'bot',
+                  content: `⚠️ Criteria generation failed: ${response.criteriaGenerationError || 'Unknown error'}. You can still manually enter criteria.`,
+                  timestamp: Date.now()
+                }
+              ])
+            }
+          }}
+        />
+      )}
     </>
   )
 }

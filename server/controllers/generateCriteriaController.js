@@ -69,16 +69,20 @@ export async function generateCriteria(req, res) {
     // Step 2: Use LLM to analyze and generate criteria
     const criteriaPrompt = `You are an expert at analyzing certificate documents and generating evaluation criteria.
 
-Analyze the following certificate document content and generate appropriate evaluation criteria with weights.
+CRITICAL: You MUST ONLY generate criteria that are EXPLICITLY mentioned or found in the document content below. Do NOT generate criteria that are not present in the document, even if they are common certificate validation points.
+
+Analyze the following certificate document content and generate ONLY the evaluation criteria that are actually present in this document.
 
 Document Content:
 ${allDocumentContent.substring(0, 8000)} ${allDocumentContent.length > 8000 ? "...(truncated)" : ""}
 
-Generate criteria that:
-1. Are relevant to the certificate type and content
-2. Include common certificate validation points (expiry dates, issuing agency, certificate numbers, standards, scope, etc.)
-3. Have appropriate weights that sum to ≤ 1.0
-4. Include specific values found in the document when applicable
+Rules for generating criteria:
+1. ONLY include criteria that are explicitly mentioned or found in the document content above
+2. If the document only mentions expiry date, generate ONLY expiry date criteria - do NOT add other criteria like agency name, certificate number, etc. unless they are also mentioned
+3. If a criterion is not found in the document, DO NOT include it in the criteria object
+4. Extract specific values from the document when available (e.g., if an expiry date is mentioned, include it as the value)
+5. Weights should sum to ≤ 1.0 and be proportional to the importance of each criterion in the document
+6. Mark criteria as "required": true only if the document indicates they are mandatory
 
 Return ONLY a valid JSON object in this exact format:
 {
@@ -87,44 +91,44 @@ Return ONLY a valid JSON object in this exact format:
       "weight": 0.3,
       "required": true,
       "value": "specific value or null"
-    },
-    "criterionName2": {
-      "weight": 0.2,
-      "required": true,
-      "value": null
     }
   },
   "description": "Natural language description of the criteria",
   "threshold": 70
 }
 
-Example:
+Example 1 - Document only mentions expiry date:
 {
   "criteria": {
     "expiryDate": {
-      "weight": 0.4,
+      "weight": 1.0,
+      "required": true,
+      "value": "2025-12-31"
+    }
+  },
+  "description": "Validate that the certificate expiry date is 2025-12-31.",
+  "threshold": 70
+}
+
+Example 2 - Document mentions multiple criteria:
+{
+  "criteria": {
+    "expiryDate": {
+      "weight": 0.5,
       "required": true,
       "value": null
     },
     "agencyName": {
-      "weight": 0.3,
+      "weight": 0.5,
       "required": true,
       "value": "ABC Certification Agency"
-    },
-    "certificateNumber": {
-      "weight": 0.2,
-      "required": false,
-      "value": null
-    },
-    "standardCompliance": {
-      "weight": 0.1,
-      "required": false,
-      "value": "ISO 27001"
     }
   },
-  "description": "Validate certificate expiry date, verify issuing agency is ABC Certification Agency, check certificate number format, and confirm ISO 27001 compliance.",
+  "description": "Validate certificate expiry date and verify issuing agency is ABC Certification Agency.",
   "threshold": 70
 }
+
+IMPORTANT: If the document content is empty or contains no identifiable criteria, return an empty criteria object: {"criteria": {}, "description": "No criteria found in document", "threshold": 70}
 
 Return ONLY the JSON, no other text.`;
 

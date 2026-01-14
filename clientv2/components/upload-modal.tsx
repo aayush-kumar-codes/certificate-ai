@@ -4,12 +4,17 @@ import type React from "react"
 
 import { X, Upload, AlertCircle } from "lucide-react"
 import { useState, useRef } from "react"
+import { uploadPDFs, generateCriteria } from "@/lib/api"
 
 interface UploadModalProps {
   onClose: () => void
+  sessionId?: string
+  setSessionId?: (sessionId: string) => void
+  onUploadComplete?: (response: any) => void
+  setIsLoadingResponse?: (loading: boolean) => void
 }
 
-export default function UploadModal({ onClose }: UploadModalProps) {
+export default function UploadModal({ onClose, sessionId, setSessionId, onUploadComplete, setIsLoadingResponse }: UploadModalProps) {
   const [file, setFile] = useState<File | null>(null)
   const [isDragging, setIsDragging] = useState(false)
   const [isUploading, setIsUploading] = useState(false)
@@ -29,27 +34,109 @@ export default function UploadModal({ onClose }: UploadModalProps) {
     setIsDragging(false)
     const files = e.dataTransfer.files
     if (files.length > 0) {
-      setFile(files[0])
+      const droppedFile = files[0]
+      // Validate file type
+      if (droppedFile.type === 'application/pdf' || droppedFile.type.startsWith('image/')) {
+        setFile(droppedFile)
+      } else {
+        alert('Please upload PDF or image files only')
+      }
     }
   }
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length > 0) {
-      setFile(e.target.files[0])
+      const selectedFile = e.target.files[0]
+      // Validate file type
+      if (selectedFile.type === 'application/pdf' || selectedFile.type.startsWith('image/')) {
+        setFile(selectedFile)
+      } else {
+        alert('Please upload PDF or image files only')
+        if (fileInputRef.current) {
+          fileInputRef.current.value = ''
+        }
+      }
     }
   }
 
   const handleUpload = async () => {
-    if (!file) return
+    if (!file || isUploading) return
 
     setIsUploading(true)
-    // Mock API call - replace with actual API later
-    console.log("Uploading file:", file.name)
+    
+    // Show loading state in chat immediately
+    setIsLoadingResponse?.(true)
 
-    setTimeout(() => {
-      setIsUploading(false)
+    try {
+      // Close modal immediately
       onClose()
-    }, 1500)
+
+      // Upload file using the API
+      const uploadResponse = await uploadPDFs(
+        [file],
+        sessionId,
+        undefined, // onProgress callback
+        undefined  // abort signal
+      )
+
+      // Update sessionId if provided
+      const currentSessionId = uploadResponse.sessionId || sessionId
+      if (uploadResponse.sessionId && setSessionId && !sessionId) {
+        setSessionId(uploadResponse.sessionId)
+      }
+
+      // Get the documentId from the uploaded document
+      const uploadedDocument = uploadResponse.documents && uploadResponse.documents.length > 0 
+        ? uploadResponse.documents[0] 
+        : null
+
+      if (uploadedDocument && currentSessionId) {
+        // Generate criteria from the uploaded document
+        try {
+          console.log("🔄 Generating criteria from uploaded document:", uploadedDocument.documentId)
+          const criteriaResponse = await generateCriteria(currentSessionId, uploadedDocument.documentId)
+          
+          // Notify parent component of upload and criteria completion
+          if (onUploadComplete) {
+            onUploadComplete({
+              ...uploadResponse,
+              criteria: criteriaResponse.success ? {
+                criteriaId: criteriaResponse.criteriaId,
+                criteria: criteriaResponse.criteria,
+                description: criteriaResponse.description,
+                threshold: criteriaResponse.threshold,
+              } : undefined,
+              criteriaGenerationStatus: criteriaResponse.success ? 'completed' : 'failed',
+              criteriaGenerationError: criteriaResponse.error,
+            })
+          }
+        } catch (criteriaError) {
+          console.error("Error generating criteria:", criteriaError)
+          // Notify parent even if criteria generation fails
+          if (onUploadComplete) {
+            onUploadComplete({
+              ...uploadResponse,
+              criteriaGenerationStatus: 'failed',
+              criteriaGenerationError: criteriaError instanceof Error ? criteriaError.message : 'Failed to generate criteria',
+            })
+          }
+        }
+      } else {
+        // No document uploaded or no sessionId, just notify of upload completion
+        if (onUploadComplete) {
+          onUploadComplete(uploadResponse)
+        }
+      }
+
+      // Hide loading state after everything completes
+      setIsLoadingResponse?.(false)
+    } catch (error) {
+      console.error("Error uploading file:", error)
+      setIsLoadingResponse?.(false)
+      // Error handling is done in the parent component
+    } finally {
+      setIsUploading(false)
+    }
   }
 
   return (
@@ -72,7 +159,13 @@ export default function UploadModal({ onClose }: UploadModalProps) {
               isDragging ? "border-white/40 bg-white/[0.05]" : "border-white/10 bg-white/[0.02] hover:border-white/20"
             }`}
           >
-            <input ref={fileInputRef} type="file" onChange={handleFileSelect} className="hidden" />
+            <input 
+              ref={fileInputRef} 
+              type="file" 
+              accept=".pdf,image/*"
+              onChange={handleFileSelect} 
+              className="hidden" 
+            />
             <Upload className="h-8 w-8 text-white/40 mx-auto mb-2" />
             <p className="text-sm text-white/60">
               {file ? file.name : "Drag and drop your file here or click to select"}
